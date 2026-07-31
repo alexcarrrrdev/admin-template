@@ -5,9 +5,7 @@ import { usePathname } from "next/navigation"
 // Associe chaque route du tableau de bord à son titre affiché dans la
 // barre supérieure.
 const pageTitles: Record<string, string> = {
-  "/": "Tableau de bord",
-  "/utilisateurs": "Utilisateurs",
-  "/parametres": "Paramètres",
+  "/tableau-de-bord": "Tableau de bord",
 }
 
 export function TopbarTitle() {
