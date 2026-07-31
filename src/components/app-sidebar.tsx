@@ -2,13 +2,16 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard } from "lucide-react"
+import { LayoutDashboard, ShieldCheck } from "lucide-react"
 
+import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -25,6 +28,18 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" render={<Link href="/tableau-de-bord" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <ShieldCheck className="size-4" />
+              </div>
+              <span className="text-sm font-semibold">Admin Template</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupContent>
@@ -45,6 +60,9 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <NavUser />
+      </SidebarFooter>
     </Sidebar>
   )
 }
