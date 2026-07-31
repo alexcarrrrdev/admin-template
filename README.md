@@ -26,7 +26,7 @@ L'application tourne ensuite sur [http://localhost:3000](http://localhost:3000).
 
 ## Base de données
 
-1. Copier `.env.example` vers `.env` (les valeurs par défaut fonctionnent avec le `docker-compose.yml` fourni) :
+1. Copier `.env.example` vers `.env` (les valeurs par défaut fonctionnent avec le `docker-compose.yml` fourni ; si un autre Postgres occupe déjà le port 5432 sur la machine, changer `POSTGRES_PORT` et le port dans `DATABASE_URL`) :
 
    ```bash
    cp .env.example .env
