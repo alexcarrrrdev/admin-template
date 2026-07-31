@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -59,14 +60,19 @@ export function NavUser() {
             side={isMobile ? "bottom" : "right"}
             className="w-56"
           >
-            <DropdownMenuLabel className="font-normal">
-              <div className="grid text-left text-sm leading-tight">
-                <span className="truncate font-medium">{currentUser.name}</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  {currentUser.email}
-                </span>
-              </div>
-            </DropdownMenuLabel>
+            {/* Base UI exige un Group parent pour un GroupLabel. */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="grid text-left text-sm leading-tight">
+                  <span className="truncate font-medium">
+                    {currentUser.name}
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    {currentUser.email}
+                  </span>
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <UserIcon />
