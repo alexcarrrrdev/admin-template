@@ -30,7 +30,7 @@ type NavUserProps = {
 
 // Déduit des initiales à partir du nom (ex. "Alex Caron" -> "AC"), ou à
 // défaut à partir du courriel (ex. "alex@exemple.com" -> "A").
-function getInitials(name: string, email: string) {
+export function getInitials(name: string, email: string) {
   const trimmedName = name.trim()
   if (trimmedName) {
     const parts = trimmedName.split(/\s+/)

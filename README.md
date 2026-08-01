@@ -71,3 +71,25 @@ Sans arguments, le script les demande un à un de façon interactive. Il crée l
 Aucun fournisseur de courriel n'est installé par défaut. Tant qu'aucun n'est configuré, `src/lib/email.ts` affiche simplement le message (destinataire, sujet, lien de réinitialisation) dans la console du serveur — pratique en développement, sans dépendance externe ni clé API.
 
 Pour brancher un vrai fournisseur (ex. [Resend](https://resend.com), SMTP...) en production, il suffit de modifier la fonction `sendEmail` dans `src/lib/email.ts` : le reste de l'application (flux de réinitialisation de mot de passe, etc.) n'a rien à changer.
+
+## Tests
+
+Les tests utilisent [Vitest](https://vitest.dev), avec deux « projects » configurés dans `vitest.config.mts` :
+
+- **`node`** — tests unitaires backend purs, sans base de données : `src/lib/permissions.ts` (permissions par rôle), `src/lib/schemas/auth.ts` (validation Zod) et `src/lib/email.ts`.
+- **`jsdom`** — tests de composants React (DOM simulé, [Testing Library](https://testing-library.com)) : les initiales dans `src/components/nav-user.tsx` et les formulaires d'authentification (`login-form.tsx`, `forgot-password-form.tsx`, `reset-password-form.tsx`). Les Server Actions (`src/app/actions/auth.ts`) y sont simulées avec `vi.mock`, aucun de ces tests ne touche à la base de données.
+
+```bash
+npm test          # exécute les projects "node" et "jsdom" une seule fois
+npm run test:watch  # idem, en mode watch
+```
+
+Un troisième project, **`integration`**, teste `src/lib/auth.ts` contre une vraie base Postgres locale (via `auth.api.signInEmail`, `signUpEmail`, etc., pas par HTTP) : création d'utilisateur, connexion, rejet de l'inscription publique, réinitialisation de mot de passe. Ces tests vivent dans des fichiers `*.integration.test.ts`, sont exclus de `npm test`, et nécessitent Postgres démarré (`docker compose up -d`) :
+
+```bash
+npm run test:integration
+```
+
+Chaque test d'intégration crée son propre utilisateur avec un courriel unique et le supprime après coup (`afterEach`) : la suite est rejouable sans risque et ne touche jamais aux comptes existants. Si Postgres n'est pas joignable, l'erreur affichée l'indique clairement plutôt que de laisser remonter une erreur de connexion brute.
+
+Les tests vivent à côté du code qu'ils couvrent (`src/**/*.test.ts(x)`), ce qui rend le pattern facile à reproduire pour tout nouveau fichier du template. Il n'y a pas de tests end-to-end (Playwright) dans ce template.
