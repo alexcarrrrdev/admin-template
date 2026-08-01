@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { toast } from "sonner"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import { loginAction } from "@/app/actions/auth"
@@ -20,16 +19,10 @@ vi.mock("next/navigation", () => ({
   }),
 }))
 
-vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
-}))
-
 const mockedLoginAction = vi.mocked(loginAction)
-const mockedToastError = vi.mocked(toast.error)
 
 beforeEach(() => {
   mockedLoginAction.mockReset()
-  mockedToastError.mockClear()
 })
 
 describe("LoginForm", () => {
@@ -95,7 +88,7 @@ describe("LoginForm", () => {
     })
   })
 
-  it("affiche l'erreur retournée par l'action au moyen d'un toast", async () => {
+  it("affiche l'erreur retournée par l'action directement dans le formulaire", async () => {
     mockedLoginAction.mockResolvedValue({
       error: "Courriel ou mot de passe invalide.",
     })
@@ -106,10 +99,29 @@ describe("LoginForm", () => {
     await user.type(screen.getByLabelText("Mot de passe"), "mauvais-mdp")
     await user.click(screen.getByRole("button", { name: "Se connecter" }))
 
+    // L'erreur doit être annoncée aux lecteurs d'écran (role="alert") et
+    // rester visible, contrairement à un toast qui disparaît de lui-même.
+    const alerte = await screen.findByRole("alert")
+    expect(alerte).toHaveTextContent("Courriel ou mot de passe invalide.")
+  })
+
+  it("efface l'erreur précédente lors d'une nouvelle tentative", async () => {
+    mockedLoginAction.mockResolvedValue({
+      error: "Courriel ou mot de passe invalide.",
+    })
+    const user = userEvent.setup()
+    render(<LoginForm />)
+
+    await user.type(screen.getByLabelText("Courriel"), "alex@exemple.com")
+    await user.type(screen.getByLabelText("Mot de passe"), "mauvais-mdp")
+    await user.click(screen.getByRole("button", { name: "Se connecter" }))
+    expect(await screen.findByRole("alert")).toBeInTheDocument()
+
+    mockedLoginAction.mockResolvedValue({})
+    await user.click(screen.getByRole("button", { name: "Se connecter" }))
+
     await waitFor(() => {
-      expect(mockedToastError).toHaveBeenCalledWith(
-        "Courriel ou mot de passe invalide.",
-      )
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     })
   })
 })

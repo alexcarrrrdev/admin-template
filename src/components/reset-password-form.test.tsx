@@ -9,10 +9,6 @@ vi.mock("@/app/actions/auth", () => ({
   resetPasswordAction: vi.fn(),
 }))
 
-vi.mock("sonner", () => ({
-  toast: { error: vi.fn(), success: vi.fn() },
-}))
-
 const mockedResetPasswordAction = vi.mocked(resetPasswordAction)
 
 beforeEach(() => {
@@ -67,5 +63,30 @@ describe("ResetPasswordForm", () => {
         token,
       )
     })
+  })
+
+  it("affiche l'erreur retournée par l'action directement dans le formulaire", async () => {
+    mockedResetPasswordAction.mockResolvedValue({
+      error: "Ce lien de réinitialisation est invalide ou a expiré.",
+    })
+    const user = userEvent.setup()
+    render(<ResetPasswordForm token={token} />)
+
+    await user.type(
+      screen.getByLabelText("Nouveau mot de passe"),
+      "motdepasse123",
+    )
+    await user.type(
+      screen.getByLabelText("Confirmer le mot de passe"),
+      "motdepasse123",
+    )
+    await user.click(
+      screen.getByRole("button", { name: /réinitialiser le mot de passe/i }),
+    )
+
+    const alerte = await screen.findByRole("alert")
+    expect(alerte).toHaveTextContent(
+      "Ce lien de réinitialisation est invalide ou a expiré.",
+    )
   })
 })
