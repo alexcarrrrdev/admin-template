@@ -4,13 +4,14 @@ import { useState } from "react"
 import Link from "next/link"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { toast } from "sonner"
+import { CircleAlertIcon } from "lucide-react"
 
 import { resetPasswordAction } from "@/app/actions/auth"
 import {
   resetPasswordSchema,
   type ResetPasswordInput,
 } from "@/lib/schemas/auth"
+import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -28,6 +29,9 @@ type ResetPasswordFormProps = {
 
 export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   const [isPending, setIsPending] = useState(false)
+  // Même principe que le formulaire de connexion : l'erreur est affichée
+  // dans le formulaire, pas dans un toast.
+  const [error, setError] = useState<string | null>(null)
   const form = useForm<ResetPasswordInput>({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { password: "", confirmPassword: "" },
@@ -35,11 +39,12 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
 
   async function onSubmit(values: ResetPasswordInput) {
     setIsPending(true)
+    setError(null)
     try {
       // En cas de succès, resetPasswordAction() redirige elle-même vers "/".
       const result = await resetPasswordAction(values, token)
       if (result?.error) {
-        toast.error(result.error)
+        setError(result.error)
       }
     } finally {
       setIsPending(false)
@@ -69,6 +74,12 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
         onSubmit={form.handleSubmit(onSubmit)}
         className="flex flex-col gap-4"
       >
+        {error && (
+          <Alert variant="destructive">
+            <CircleAlertIcon />
+            <AlertTitle>{error}</AlertTitle>
+          </Alert>
+        )}
         <FormField
           control={form.control}
           name="password"

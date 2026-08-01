@@ -4,10 +4,11 @@ import { useState } from "react"
 import Link from "next/link"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
-import { toast } from "sonner"
+import { CircleAlertIcon } from "lucide-react"
 
 import { loginAction } from "@/app/actions/auth"
 import { loginSchema, type LoginInput } from "@/lib/schemas/auth"
+import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -21,6 +22,10 @@ import { Input } from "@/components/ui/input"
 
 export function LoginForm() {
   const [isPending, setIsPending] = useState(false)
+  // L'erreur de connexion est affichée dans le formulaire lui-même (et non
+  // dans un toast) : elle reste visible tant que l'utilisateur n'a pas
+  // retenté, juste au-dessus des champs concernés.
+  const [error, setError] = useState<string | null>(null)
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -28,13 +33,14 @@ export function LoginForm() {
 
   async function onSubmit(values: LoginInput) {
     setIsPending(true)
+    setError(null)
     try {
       // En cas de succès, loginAction() effectue elle-même la redirection
       // (redirect() lance une exception spéciale gérée par Next.js) : on
       // n'atteint la ligne suivante que si l'authentification a échoué.
       const result = await loginAction(values)
       if (result?.error) {
-        toast.error(result.error)
+        setError(result.error)
       }
     } finally {
       setIsPending(false)
@@ -47,6 +53,12 @@ export function LoginForm() {
         onSubmit={form.handleSubmit(onSubmit)}
         className="flex flex-col gap-4"
       >
+        {error && (
+          <Alert variant="destructive">
+            <CircleAlertIcon />
+            <AlertTitle>{error}</AlertTitle>
+          </Alert>
+        )}
         <FormField
           control={form.control}
           name="email"
