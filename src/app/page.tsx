@@ -1,6 +1,9 @@
 import type { Metadata } from "next"
+import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 
-import { Button } from "@/components/ui/button"
+import { auth } from "@/lib/auth"
+import { LoginForm } from "@/components/login-form"
 import {
   Card,
   CardContent,
@@ -8,14 +11,20 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 export const metadata: Metadata = {
   title: "Connexion",
 }
 
-export default function ConnexionPage() {
+export default async function ConnexionPage() {
+  // Si l'utilisateur a déjà une session valide, inutile de lui montrer le
+  // formulaire de connexion.
+  const session = await auth.api.getSession({ headers: await headers() })
+
+  if (session) {
+    redirect("/tableau-de-bord")
+  }
+
   return (
     <main className="flex min-h-svh flex-1 items-center justify-center p-4">
       <Card className="w-full max-w-sm">
@@ -26,32 +35,7 @@ export default function ConnexionPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="email">Courriel</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="nom@exemple.com"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Mot de passe</Label>
-                <a
-                  href="#"
-                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                >
-                  Mot de passe oublié ?
-                </a>
-              </div>
-              <Input id="password" name="password" type="password" />
-            </div>
-            <Button type="submit" className="mt-2 w-full">
-              Se connecter
-            </Button>
-          </form>
+          <LoginForm />
         </CardContent>
       </Card>
     </main>

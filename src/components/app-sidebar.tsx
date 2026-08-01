@@ -23,7 +23,14 @@ const navItems = [
   { title: "Tableau de bord", href: "/tableau-de-bord", icon: LayoutDashboard },
 ]
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  user: {
+    name: string
+    email: string
+  }
+}
+
+export function AppSidebar({ user }: AppSidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -61,7 +68,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   )
