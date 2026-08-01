@@ -1,7 +1,9 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { ChevronsUpDownIcon, LogOutIcon, Settings2Icon, UserIcon } from "lucide-react"
 
+import { signOut } from "@/lib/auth-client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -19,16 +21,38 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-// Utilisateur affiché en bas de la barre latérale. Purement visuel pour le
-// moment : aucune session réelle n'est branchée sur ce composant.
-const currentUser = {
-  name: "Alex Caron",
-  email: "alex.caron@example.com",
-  initials: "AC",
+type NavUserProps = {
+  user: {
+    name: string
+    email: string
+  }
 }
 
-export function NavUser() {
+// Déduit des initiales à partir du nom (ex. "Alex Caron" -> "AC"), ou à
+// défaut à partir du courriel (ex. "alex@exemple.com" -> "A").
+export function getInitials(name: string, email: string) {
+  const trimmedName = name.trim()
+  if (trimmedName) {
+    const parts = trimmedName.split(/\s+/)
+    const initials = parts
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+    if (initials) return initials.toUpperCase()
+  }
+  return email.slice(0, 1).toUpperCase()
+}
+
+export function NavUser({ user }: NavUserProps) {
   const { isMobile } = useSidebar()
+  const router = useRouter()
+  const initials = getInitials(user.name, user.email)
+
+  async function handleSignOut() {
+    await signOut()
+    router.push("/")
+    router.refresh()
+  }
 
   return (
     <SidebarMenu>
@@ -44,13 +68,13 @@ export function NavUser() {
           >
             <Avatar className="rounded-lg">
               <AvatarFallback className="rounded-lg">
-                {currentUser.initials}
+                {initials}
               </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{currentUser.name}</span>
+              <span className="truncate font-medium">{user.name}</span>
               <span className="truncate text-xs text-muted-foreground">
-                {currentUser.email}
+                {user.email}
               </span>
             </div>
             <ChevronsUpDownIcon className="ml-auto size-4" />
@@ -65,10 +89,10 @@ export function NavUser() {
               <DropdownMenuLabel className="font-normal">
                 <div className="grid text-left text-sm leading-tight">
                   <span className="truncate font-medium">
-                    {currentUser.name}
+                    {user.name}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {currentUser.email}
+                    {user.email}
                   </span>
                 </div>
               </DropdownMenuLabel>
@@ -83,7 +107,7 @@ export function NavUser() {
               Paramètres
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
+            <DropdownMenuItem variant="destructive" onClick={handleSignOut}>
               <LogOutIcon />
               Déconnexion
             </DropdownMenuItem>
