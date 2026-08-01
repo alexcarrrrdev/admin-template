@@ -79,17 +79,17 @@ Les tests utilisent [Vitest](https://vitest.dev), avec deux « projects » confi
 - **`node`** — tests unitaires backend purs, sans base de données : `src/lib/permissions.ts` (permissions par rôle), `src/lib/schemas/auth.ts` (validation Zod) et `src/lib/email.ts`.
 - **`jsdom`** — tests de composants React (DOM simulé, [Testing Library](https://testing-library.com)) : les initiales dans `src/components/nav-user.tsx` et les formulaires d'authentification (`login-form.tsx`, `forgot-password-form.tsx`, `reset-password-form.tsx`). Les Server Actions (`src/app/actions/auth.ts`) y sont simulées avec `vi.mock`, aucun de ces tests ne touche à la base de données.
 
-```bash
-npm test          # exécute les projects "node" et "jsdom" une seule fois
-npm run test:watch  # idem, en mode watch
-```
-
-Un troisième project, **`integration`**, teste `src/lib/auth.ts` contre une vraie base Postgres locale (via `auth.api.signInEmail`, `signUpEmail`, etc., pas par HTTP) : création d'utilisateur, connexion, rejet de l'inscription publique, réinitialisation de mot de passe. Ces tests vivent dans des fichiers `*.integration.test.ts`, sont exclus de `npm test`, et nécessitent Postgres démarré (`docker compose up -d`) :
+Un troisième project, **`integration`**, teste `src/lib/auth.ts` contre une vraie base Postgres locale (via `auth.api.signInEmail`, `signUpEmail`, etc., pas par HTTP) : création d'utilisateur, connexion, rejet de l'inscription publique, réinitialisation de mot de passe. Ces tests vivent dans des fichiers `*.integration.test.ts` et nécessitent Postgres démarré (`docker compose up -d`).
 
 ```bash
-npm run test:integration
+npm test                 # tout : node, jsdom et integration (Postgres requis)
+npm run test:unit        # seulement node et jsdom, sans base de données
+npm run test:integration # seulement les tests d'intégration
+npm run test:watch       # mode watch, sans les tests d'intégration
 ```
 
-Chaque test d'intégration crée son propre utilisateur avec un courriel unique et le supprime après coup (`afterEach`) : la suite est rejouable sans risque et ne touche jamais aux comptes existants. Si Postgres n'est pas joignable, l'erreur affichée l'indique clairement plutôt que de laisser remonter une erreur de connexion brute.
+Si Postgres n'est pas démarré, seuls les tests d'intégration échouent — les tests unitaires et de composants continuent de s'exécuter normalement, et le message d'erreur rappelle comment démarrer la base ou lancer `npm run test:unit`.
+
+Chaque test d'intégration crée son propre utilisateur avec un courriel unique et le supprime après coup (`afterEach`) : la suite est rejouable sans risque et ne touche jamais aux comptes existants.
 
 Les tests vivent à côté du code qu'ils couvrent (`src/**/*.test.ts(x)`), ce qui rend le pattern facile à reproduire pour tout nouveau fichier du template. Il n'y a pas de tests end-to-end (Playwright) dans ce template.

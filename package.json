@@ -12,8 +12,9 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "create-admin": "tsx scripts/create-admin.ts",
-    "test": "vitest run --project=!integration",
+    "test": "vitest run",
     "test:watch": "vitest --project=!integration",
+    "test:unit": "vitest run --project=!integration",
     "test:integration": "vitest run --project=integration"
   },
   "dependencies": {

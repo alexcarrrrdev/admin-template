@@ -54,8 +54,9 @@ beforeAll(async () => {
   } catch (cause) {
     throw new Error(
       "Impossible de se connecter à PostgreSQL (voir DATABASE_URL dans .env, " +
-        "port 5433 par défaut). Démarrez la base avec « docker compose up -d » " +
-        "avant de lancer `npm run test:integration`.",
+        "port 5433 par défaut). Démarrez la base avec « docker compose up -d », " +
+        "ou lancez seulement les tests qui n'en ont pas besoin avec " +
+        "« npm run test:unit ».",
       { cause: cause as Error },
     )
   }
