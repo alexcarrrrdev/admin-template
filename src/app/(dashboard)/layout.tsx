@@ -3,6 +3,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
+import { getAppName } from "@/lib/app-settings"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopbarTitle } from "@/components/topbar-title"
 import {
@@ -25,9 +26,11 @@ export default async function DashboardLayout({
     redirect("/")
   }
 
+  const appName = await getAppName()
+
   return (
     <SidebarProvider>
-      <AppSidebar user={session.user} />
+      <AppSidebar user={session.user} appName={appName} />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
           <SidebarTrigger />

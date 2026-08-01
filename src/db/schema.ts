@@ -80,6 +80,20 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+// Réglages globaux de l'application (ex. nom affiché dans la barre latérale),
+// gérés par un administrateur depuis /administration/general. Table à ligne
+// unique : `id` a toujours la même valeur (voir APP_SETTINGS_ID dans
+// src/lib/app-settings.ts), ce qui garantit qu'il ne peut jamais exister
+// qu'une seule rangée.
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey(),
+  appName: text("app_name").notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
