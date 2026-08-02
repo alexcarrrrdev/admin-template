@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { BrandHeader } from "@/components/brand-header"
 import { ResetPasswordForm } from "@/components/reset-password-form"
 import {
   Card,
@@ -23,7 +24,8 @@ export default async function ReinitialiserMotDePassePage({
   const { token } = await searchParams
 
   return (
-    <main className="flex min-h-svh flex-1 items-center justify-center p-4">
+    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 p-4">
+      <BrandHeader />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-xl">Réinitialiser le mot de passe</CardTitle>

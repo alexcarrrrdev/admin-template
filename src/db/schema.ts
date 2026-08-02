@@ -2,12 +2,29 @@ import { relations } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  customType,
   index,
   integer,
   pgTable,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+
+// Type Postgres `bytea` (données binaires), utilisé ci-dessous pour stocker
+// le logo personnalisé de l'application directement en base plutôt que sur
+// disque ou dans un stockage objet externe — évite une dépendance
+// supplémentaire pour un template dont la taille de fichier est plafonnée à
+// 1 Mo (voir src/lib/settings/logo-validation.ts). Drizzle 0.45 n'a pas de
+// colonne `bytea` intégrée pour Postgres (contrairement à MySQL/SQLite) ; on
+// la déclare donc via `customType` (voir
+// node_modules/drizzle-orm/pg-core/columns/custom.d.ts). Le driver `pg`
+// désérialise nativement une colonne bytea en `Buffer` Node, donc aucune
+// fonction `toDriver`/`fromDriver` n'est nécessaire ici.
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // Tables requises par Better Auth (authentification, sessions, comptes,
 // jetons de vérification, compteurs de limitation de débit). Générées via
@@ -109,6 +126,15 @@ export const rateLimit = pgTable("rate_limit", {
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),
   appName: text("app_name").notNull(),
+  // Logo personnalisé (facultatif) : octets bruts de l'image + type MIME
+  // déclaré à l'upload (voir setLogo/getLogo dans
+  // src/lib/settings/app-settings.ts et la validation dans
+  // src/lib/settings/logo-validation.ts). Les deux colonnes sont NULL tant
+  // qu'aucun logo n'a été téléversé, ou de nouveau après un retrait —
+  // l'application retombe alors sur l'icône par défaut (voir
+  // src/components/brand-mark.tsx).
+  logo: bytea("logo"),
+  logoMimeType: text("logo_mime_type"),
   updatedAt: timestamp("updated_at")
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())

@@ -24,6 +24,8 @@ function renderSidebar(role: string | null | undefined) {
       <AppSidebar
         user={{ name: "Alex Caron", email: "alex@exemple.com", role }}
         appName="Mon Application"
+        hasLogo={false}
+        logoVersion={0}
       />
     </SidebarProvider>,
   )

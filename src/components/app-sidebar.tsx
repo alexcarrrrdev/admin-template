@@ -7,11 +7,11 @@ import {
   ChevronRightIcon,
   LayoutDashboard,
   Settings2Icon,
-  ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
 
 import { hasPermission } from "@/lib/auth/permissions"
+import { BrandMark } from "@/components/brand-mark"
 import { NavUser } from "@/components/nav-user"
 import {
   Collapsible,
@@ -90,6 +90,8 @@ type SidebarUser = {
 type AppSidebarProps = {
   user: SidebarUser
   appName: string
+  hasLogo: boolean
+  logoVersion: number
 }
 
 // Filtre la navigation selon les permissions de l'utilisateur : les entrées
@@ -110,7 +112,7 @@ function visibleNavItems(user: SidebarUser): NavItem[] {
     )
 }
 
-export function AppSidebar({ user, appName }: AppSidebarProps) {
+export function AppSidebar({ user, appName, hasLogo, logoVersion }: AppSidebarProps) {
   const pathname = usePathname()
   const items = visibleNavItems(user)
 
@@ -120,9 +122,7 @@ export function AppSidebar({ user, appName }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/tableau-de-bord" />}>
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <ShieldCheck className="size-4" />
-              </div>
+              <BrandMark hasLogo={hasLogo} logoVersion={logoVersion} className="size-8" />
               <span className="truncate text-sm font-semibold">{appName}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
