@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ChevronsUpDownIcon, LogOutIcon, Settings2Icon, UserIcon } from "lucide-react"
 
@@ -98,11 +99,11 @@ export function NavUser({ user }: NavUserProps) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/profil" />}>
               <UserIcon />
               Profil
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem render={<Link href="/parametres" />}>
               <Settings2Icon />
               Paramètres
             </DropdownMenuItem>

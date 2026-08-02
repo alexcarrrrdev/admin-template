@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { sql } from "drizzle-orm"
+import { convertSetCookieToCookie } from "better-auth/test"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 // Tests d'intégration : contrairement aux autres tests (project "node" /
@@ -156,6 +157,101 @@ describe("Better Auth — intégration Postgres", () => {
           email: uniqueEmail("unknown"),
           redirectTo: "/reinitialiser-mot-de-passe",
         },
+        headers: new Headers(),
+      }),
+    ).resolves.toBeDefined()
+  })
+})
+
+describe("Better Auth — changement de mot de passe et sessions", () => {
+  it("changePassword avec revokeOtherSessions révoque les autres sessions actives", async () => {
+    const user = await createTestUser("change-password", "MotDePasse123!")
+
+    // Simule deux appareils connectés : deux sessions actives distinctes
+    // pour le même compte. `returnHeaders: true` donne accès à l'en-tête
+    // Set-Cookie de chaque connexion, convertie en en-tête Cookie
+    // exploitable pour les appels suivants via convertSetCookieToCookie
+    // (utilitaire officiel de better-auth/test-utils).
+    const firstSignIn = await auth.api.signInEmail({
+      body: { email: user.email, password: user.password },
+      headers: new Headers(),
+      returnHeaders: true,
+    })
+    const secondSignIn = await auth.api.signInEmail({
+      body: { email: user.email, password: user.password },
+      headers: new Headers(),
+      returnHeaders: true,
+    })
+
+    const firstSessionHeaders = convertSetCookieToCookie(firstSignIn.headers)
+    const secondSessionHeaders = convertSetCookieToCookie(secondSignIn.headers)
+
+    const context = await auth.$context
+    const sessionsBefore = await context.internalAdapter.listSessions(user.id)
+    expect(sessionsBefore).toHaveLength(2)
+
+    // Changement de mot de passe depuis la première session, avec
+    // révocation des autres sessions (voir src/app/actions/profile.ts) :
+    // exigence de sécurité pour qu'une session volée ne survive pas à un
+    // changement de mot de passe.
+    const result = await auth.api.changePassword({
+      body: {
+        currentPassword: user.password,
+        newPassword: "NouveauMotDePasse456!",
+        revokeOtherSessions: true,
+      },
+      headers: firstSessionHeaders,
+    })
+
+    // La session utilisée pour l'appel est recréée (nouveau jeton) plutôt
+    // que simplement conservée : toutes les sessions existantes (y compris
+    // celle-ci) sont révoquées, puis une nouvelle est créée.
+    expect(result.token).toBeTruthy()
+
+    const sessionsAfter = await context.internalAdapter.listSessions(user.id)
+    expect(sessionsAfter).toHaveLength(1)
+    expect(sessionsAfter[0]?.token).toBe(result.token)
+
+    // L'ancienne session « seconde », jamais réutilisée pour le changement
+    // de mot de passe, ne doit plus être valide.
+    await expect(
+      auth.api.getSession({ headers: secondSessionHeaders }),
+    ).resolves.toBeNull()
+
+    // Le nouveau mot de passe permet bien de se reconnecter.
+    await expect(
+      auth.api.signInEmail({
+        body: { email: user.email, password: "NouveauMotDePasse456!" },
+        headers: new Headers(),
+      }),
+    ).resolves.toBeDefined()
+  })
+
+  it("changePassword échoue avec un mauvais mot de passe actuel et ne change rien", async () => {
+    const user = await createTestUser("change-password-bad", "MotDePasse123!")
+
+    const signIn = await auth.api.signInEmail({
+      body: { email: user.email, password: user.password },
+      headers: new Headers(),
+      returnHeaders: true,
+    })
+    const sessionHeaders = convertSetCookieToCookie(signIn.headers)
+
+    await expect(
+      auth.api.changePassword({
+        body: {
+          currentPassword: "mauvais-mot-de-passe",
+          newPassword: "NouveauMotDePasse456!",
+          revokeOtherSessions: true,
+        },
+        headers: sessionHeaders,
+      }),
+    ).rejects.toThrow()
+
+    // L'ancien mot de passe fonctionne toujours.
+    await expect(
+      auth.api.signInEmail({
+        body: { email: user.email, password: user.password },
         headers: new Headers(),
       }),
     ).resolves.toBeDefined()

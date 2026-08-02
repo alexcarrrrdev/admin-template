@@ -7,6 +7,23 @@ import "@testing-library/jest-dom/vitest"
 import { cleanup } from "@testing-library/react"
 import { afterEach } from "vitest"
 
+// jsdom n'implémente pas window.matchMedia : nécessaire dès qu'un composant
+// dépend de useIsMobile (voir src/hooks/use-mobile.ts), utilisé par
+// SidebarProvider. Toujours "non mobile" par défaut dans les tests.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList
+}
+
 // @testing-library/react ne nettoie le DOM après chaque test automatiquement
 // que si `afterEach` est une globale (mode `test.globals`), ce qui n'est pas
 // le cas ici (imports explicites depuis "vitest" — voir vitest.config.ts).

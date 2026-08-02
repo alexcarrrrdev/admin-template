@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation"
 // barre supérieure.
 const pageTitles: Record<string, string> = {
   "/tableau-de-bord": "Tableau de bord",
+  "/profil": "Profil",
+  "/parametres": "Paramètres",
+  "/administration/general": "Administration – Général",
 }
 
 export function TopbarTitle() {
