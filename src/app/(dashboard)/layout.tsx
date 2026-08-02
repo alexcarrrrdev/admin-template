@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
 
 import { getCurrentSession } from "@/lib/auth/session"
-import { getAppName } from "@/lib/settings/app-settings"
+import { getAppSettingsSummary } from "@/lib/settings/app-settings"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopbarTitle } from "@/components/topbar-title"
 import {
@@ -25,11 +25,16 @@ export default async function DashboardLayout({
     redirect("/")
   }
 
-  const appName = await getAppName()
+  const { appName, hasLogo, logoVersion } = await getAppSettingsSummary()
 
   return (
     <SidebarProvider>
-      <AppSidebar user={session.user} appName={appName} />
+      <AppSidebar
+        user={session.user}
+        appName={appName}
+        hasLogo={hasLogo}
+        logoVersion={logoVersion}
+      />
       <SidebarInset>
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
           <SidebarTrigger />

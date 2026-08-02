@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
 import { getCurrentSession } from "@/lib/auth/session"
+import { BrandHeader } from "@/components/brand-header"
 import { LoginForm } from "@/components/login-form"
 import {
   Card,
@@ -25,7 +26,8 @@ export default async function ConnexionPage() {
   }
 
   return (
-    <main className="flex min-h-svh flex-1 items-center justify-center p-4">
+    <main className="flex min-h-svh flex-1 flex-col items-center justify-center gap-6 p-4">
+      <BrandHeader />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-xl">Connexion</CardTitle>

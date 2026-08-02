@@ -141,6 +141,34 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         headers: securityHeaders,
       },
+      {
+        // Route /logo (src/app/logo/route.ts) : sert le logo personnalisé
+        // de l'application, potentiellement au format SVG (format actif,
+        // pouvant contenir du script) — voir src/lib/settings/logo-validation.ts
+        // pour la validation à l'upload, qui est une liste noire et non un
+        // sanitizer complet. En défense en profondeur, un navigateur qui
+        // ouvrirait cette réponse DIRECTEMENT (navigation vers /logo, pas
+        // une simple balise <img>) doit la traiter comme une origine unique
+        // isolée : `sandbox` bloque toute exécution de script, soumission
+        // de formulaire ou popup, quoi qu'il arrive.
+        //
+        // Remplace ici (et non dans le Route Handler lui-même) la valeur de
+        // Content-Security-Policy posée par l'entrée générale ci-dessus :
+        // d'après le « Header Overriding Behavior » documenté (voir
+        // node_modules/next/dist/docs/01-app/03-api-reference/05-config/
+        // 01-next-config-js/headers.md), quand plusieurs entrées de ce
+        // tableau `headers()` matchent la même route pour la même clé, la
+        // DERNIÈRE l'emporte — et ceci s'applique aussi face à un en-tête de
+        // même nom posé par le Route Handler lui-même, qui serait sinon
+        // silencieusement écrasé par l'entrée générale ci-dessus.
+        source: "/logo",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "sandbox",
+          },
+        ],
+      },
     ];
   },
 };

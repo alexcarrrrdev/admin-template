@@ -78,6 +78,16 @@ Aucun fournisseur de courriel n'est installé par défaut. Tant qu'aucun n'est c
 
 Pour brancher un vrai fournisseur (ex. [Resend](https://resend.com), SMTP...) en production, il suffit de modifier la fonction `sendEmail` dans `src/lib/email.ts` : le reste de l'application (flux de réinitialisation de mot de passe, etc.) n'a rien à changer.
 
+### Logo personnalisé
+
+Un administrateur peut téléverser un logo depuis **/administration/general** (carte « Logo »), en plus du nom de l'application déjà personnalisable sur cette même page. Le logo remplace l'icône par défaut (ShieldCheck) partout où l'identité de l'application est affichée : barre latérale et pages publiques de connexion (`/`, `/mot-de-passe-oublie`, `/reinitialiser-mot-de-passe`).
+
+- **Formats acceptés** : PNG, JPEG, WebP et SVG.
+- **Taille maximale** : 1 Mo.
+- **Repli par défaut** : tant qu'aucun logo n'est téléversé (ou après un clic sur « Retirer le logo »), l'icône ShieldCheck s'affiche à sa place — aucune configuration n'est requise pour démarrer.
+
+Le fichier est validé côté serveur (taille, type MIME, signature binaire pour PNG/JPEG/WebP, liste noire de motifs dangereux pour SVG — voir `src/lib/settings/logo-validation.ts`) puis stocké directement en base de données (colonnes `logo`/`logo_mime_type` de `app_settings`, voir `src/db/schema.ts`), sans dépendance à un stockage de fichiers externe. Il est ensuite servi par la route `/logo` (`src/app/logo/route.ts`), publique et mise en cache de façon agressive côté navigateur grâce à un paramètre de version qui change automatiquement à chaque mise à jour.
+
 ## Tests
 
 Les tests utilisent [Vitest](https://vitest.dev), avec deux « projects » configurés dans `vitest.config.mts` :

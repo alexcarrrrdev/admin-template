@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation"
 
 import { getCurrentSession } from "@/lib/auth/session"
-import { canManageAppSettings, getAppName } from "@/lib/settings/app-settings"
+import {
+  canManageAppSettings,
+  getAppSettingsSummary,
+} from "@/lib/settings/app-settings"
 import { AppNameForm } from "@/components/administration/app-name-form"
+import { LogoUploadForm } from "@/components/administration/logo-upload-form"
 import {
   Card,
   CardContent,
@@ -36,7 +40,7 @@ export default async function AdministrationGeneralPage() {
     )
   }
 
-  const appName = await getAppName()
+  const { appName, hasLogo, logoVersion } = await getAppSettingsSummary()
 
   return (
     <div className="flex flex-col gap-4">
@@ -49,6 +53,18 @@ export default async function AdministrationGeneralPage() {
         </CardHeader>
         <CardContent>
           <AppNameForm defaultAppName={appName} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Logo</CardTitle>
+          <CardDescription>
+            Logo personnalisé affiché dans la barre latérale et sur les
+            pages de connexion.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LogoUploadForm hasLogo={hasLogo} logoVersion={logoVersion} />
         </CardContent>
       </Card>
     </div>

@@ -25,12 +25,14 @@ export const config = {
      * Exécuter sur toutes les routes SAUF :
      * - "/" (page de connexion)
      * - "/mot-de-passe-oublie" et "/reinitialiser-mot-de-passe" (flux public)
+     * - "/logo" (image publique, affichée avant connexion — voir
+     *   src/app/logo/route.ts)
      * - "/api" (dont /api/auth, utilisée par le flux de connexion lui-même)
      * - les fichiers statiques Next.js et le favicon
      *
      * Toute nouvelle page ajoutée sous (dashboard) est donc protégée par
      * défaut, sans avoir à modifier ce matcher.
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|mot-de-passe-oublie|reinitialiser-mot-de-passe).+)",
+    "/((?!api|_next/static|_next/image|favicon.ico|logo|mot-de-passe-oublie|reinitialiser-mot-de-passe).+)",
   ],
 };
