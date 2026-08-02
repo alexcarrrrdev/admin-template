@@ -1,8 +1,7 @@
 import type { ReactNode } from "react"
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { auth } from "@/lib/auth"
+import { getCurrentSession } from "@/lib/session"
 import { getAppName } from "@/lib/app-settings"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopbarTitle } from "@/components/topbar-title"
@@ -20,7 +19,7 @@ export default async function DashboardLayout({
   // Vérification qui fait autorité : session réellement valide en base
   // (contrairement à src/proxy.ts, qui ne fait qu'une vérification optimiste
   // basée sur la présence du cookie).
-  const session = await auth.api.getSession({ headers: await headers() })
+  const session = await getCurrentSession()
 
   if (!session) {
     redirect("/")

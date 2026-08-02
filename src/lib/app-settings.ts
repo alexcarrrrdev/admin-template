@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
@@ -21,7 +22,17 @@ export function resolveAppName(row: { appName: string } | undefined | null): str
   return row?.appName ?? DEFAULT_APP_NAME
 }
 
-export async function getAppName(): Promise<string> {
+/**
+ * Lit le nom de l'application.
+ *
+ * Mémorisé avec `cache()` de React : le nom est lu à plusieurs endroits d'un
+ * même rendu (métadonnées de la racine, en-tête de la barre latérale, page
+ * /administration/general), et sans cette mémorisation chaque endroit
+ * déclencherait sa propre requête. La mémorisation ne vaut que pour la durée
+ * d'une requête HTTP : une écriture suivie d'un rafraîchissement (nouvelle
+ * requête) renvoie bien la valeur à jour.
+ */
+export const getAppName = cache(async function getAppName(): Promise<string> {
   const [row] = await db
     .select({ appName: appSettings.appName })
     .from(appSettings)
@@ -29,7 +40,7 @@ export async function getAppName(): Promise<string> {
     .limit(1)
 
   return resolveAppName(row)
-}
+})
 
 /**
  * Enregistre le nom de l'application. Crée la rangée si elle n'existe pas
