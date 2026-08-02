@@ -3,7 +3,8 @@ import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
 import { getCurrentSession } from "@/lib/auth/session"
-import { roleLabels, type Role } from "@/lib/auth/permissions"
+import { roleLabels } from "@/lib/auth/permissions"
+import { getRole } from "@/lib/auth/roles"
 import {
   ActiveSessionsCard,
   type SessionSummary,
@@ -18,10 +19,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 
-function isKnownRole(role: string | null | undefined): role is Role {
-  return !!role && role in roleLabels
-}
-
 export default async function ProfilPage() {
   const session = await getCurrentSession()
 
@@ -29,9 +26,14 @@ export default async function ProfilPage() {
     redirect("/")
   }
 
-  const roleLabel = isKnownRole(session.user.role)
-    ? roleLabels[session.user.role]
-    : session.user.role
+  // Le nom d'affichage du rôle vient désormais de la base (`role.name`,
+  // modifiable — voir src/lib/auth/roles.ts) plutôt que d'une table statique.
+  // `roleLabels` ne sert plus que de repli si la rangée est introuvable
+  // (ne devrait pas arriver : `user.role` référence `role.id` avec ON
+  // DELETE RESTRICT, voir src/db/schema.ts).
+  const roleRow = await getRole(session.user.role)
+  const roleLabel =
+    roleRow?.name ?? roleLabels[session.user.role ?? ""] ?? session.user.role
 
   // La liste des sessions requiert une session « fraîche » côté Better Auth
   // (voir freshSessionMiddleware) ; en cas d'échec on affiche un message

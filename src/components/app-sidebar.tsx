@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { hasPermission } from "@/lib/auth/permissions"
 import { BrandMark } from "@/components/brand-mark"
 import { NavUser } from "@/components/nav-user"
 import {
@@ -33,24 +32,31 @@ import {
   SidebarMenuSubItem,
 } from "@/components/ui/sidebar"
 
-// Chaque entrée peut déclarer sa propre condition d'accès. Une entrée dont
-// la condition n'est pas remplie est masquée : on n'affiche jamais un lien
-// qui mènerait à un « Accès refusé ». Ce n'est qu'un confort d'UI — la
+// Chaque entrée peut déclarer la permission qu'elle exige. Une entrée dont
+// la permission n'est pas accordée est masquée : on n'affiche jamais un
+// lien qui mènerait à un « Accès refusé ». Ce n'est qu'un confort d'UI — la
 // sécurité réelle est appliquée côté serveur, dans la page et dans la
 // Server Action correspondantes.
-type NavAccess = (user: SidebarUser) => boolean
-
+//
+// Les permissions sont désormais résolues en base de données (voir
+// src/lib/auth/permissions.ts), donc asynchrones — incompatible avec un
+// composant client comme celui-ci, qui doit rester synchrone. Le layout du
+// tableau de bord (src/app/(dashboard)/layout.tsx) résout donc l'ensemble
+// des permissions de l'utilisateur côté serveur et les transmet ici sous
+// forme de tableau de chaînes ("resource:action") : ce composant se
+// contente de les tester (inclusion dans le tableau), une opération pure et
+// synchrone.
 type NavLeaf = {
   title: string
   href: string
-  canAccess?: NavAccess
+  requiredPermission?: string
 }
 
 type NavItem = {
   title: string
   href: string
   icon: LucideIcon
-  canAccess?: NavAccess
+  requiredPermission?: string
   // Présent uniquement pour les entrées avec sous-menu (ex. "Administration").
   // Ajouter une future page à ce sous-menu (ex. "Utilisateurs", "Journal
   // d'audit") revient à ajouter une entrée à ce tableau, avec la permission
@@ -64,19 +70,27 @@ const navItems: NavItem[] = [
   { title: "Tableau de bord", href: "/tableau-de-bord", icon: LayoutDashboard },
 ]
 
-// Groupe "Administration". Une seule page existe pour l'instant
-// ("Général") — les entrées futures s'ajoutent à `items` sans créer de
-// pages vides tant qu'elles n'existent pas. Le groupe entier disparaît si
-// aucune de ses entrées n'est accessible à l'utilisateur.
+// Groupe "Administration". Le groupe entier disparaît si aucune de ses
+// entrées n'est accessible à l'utilisateur.
 const administrationNavItem: NavItem = {
   title: "Administration",
   href: "/administration",
   icon: Settings2Icon,
   items: [
     {
+      title: "Utilisateurs",
+      href: "/administration/utilisateurs",
+      requiredPermission: "user:read",
+    },
+    {
+      title: "Rôles",
+      href: "/administration/roles",
+      requiredPermission: "role:read",
+    },
+    {
       title: "Général",
       href: "/administration/general",
-      canAccess: (user) => hasPermission(user, "settings", "update"),
+      requiredPermission: "settings:update",
     },
   ],
 }
@@ -84,11 +98,14 @@ const administrationNavItem: NavItem = {
 type SidebarUser = {
   name: string
   email: string
-  role?: string | null
 }
 
 type AppSidebarProps = {
   user: SidebarUser
+  // Permissions accordées à l'utilisateur courant ("resource:action"),
+  // calculées côté serveur par le layout — voir le commentaire de
+  // `requiredPermission` ci-dessus.
+  permissions: string[]
   appName: string
   hasLogo: boolean
   logoVersion: number
@@ -96,25 +113,36 @@ type AppSidebarProps = {
 
 // Filtre la navigation selon les permissions de l'utilisateur : les entrées
 // interdites sont retirées, et un groupe vidé de toutes ses entrées
-// disparaît lui aussi.
-function visibleNavItems(user: SidebarUser): NavItem[] {
+// disparaît lui aussi. Pure et synchrone : testable sans session ni base de
+// données (voir src/components/app-sidebar.test.tsx).
+function visibleNavItems(permissions: string[]): NavItem[] {
+  const granted = new Set(permissions)
+  const isAllowed = (requiredPermission?: string) =>
+    !requiredPermission || granted.has(requiredPermission)
+
   return [...navItems, administrationNavItem]
     .map((item) =>
       item.items
         ? {
             ...item,
-            items: item.items.filter((leaf) => leaf.canAccess?.(user) ?? true),
+            items: item.items.filter((leaf) => isAllowed(leaf.requiredPermission)),
           }
         : item,
     )
     .filter((item) =>
-      item.items ? item.items.length > 0 : (item.canAccess?.(user) ?? true),
+      item.items ? item.items.length > 0 : isAllowed(item.requiredPermission),
     )
 }
 
-export function AppSidebar({ user, appName, hasLogo, logoVersion }: AppSidebarProps) {
+export function AppSidebar({
+  user,
+  permissions,
+  appName,
+  hasLogo,
+  logoVersion,
+}: AppSidebarProps) {
   const pathname = usePathname()
-  const items = visibleNavItems(user)
+  const items = visibleNavItems(permissions)
 
   return (
     <Sidebar collapsible="icon">

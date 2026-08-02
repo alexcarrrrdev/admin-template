@@ -192,7 +192,11 @@ type SessionUser = { role?: string | null } | null | undefined
  * /administration/general) s'il a la permission `settings:update` — plus
  * stricte que `settings:read`, qui ne contrôle que la visibilité du lien
  * dans la barre latérale (voir src/components/app-sidebar.tsx).
+ *
+ * Asynchrone : les permissions sont désormais résolues en base de données
+ * (voir src/lib/auth/permissions.ts) plutôt que dérivées statiquement du
+ * rôle.
  */
-export function canManageAppSettings(user: SessionUser): boolean {
+export async function canManageAppSettings(user: SessionUser): Promise<boolean> {
   return hasPermission(user, "settings", "update")
 }

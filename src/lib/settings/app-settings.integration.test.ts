@@ -23,6 +23,7 @@ let getLogo: AppSettingsModule["getLogo"]
 let setLogo: AppSettingsModule["setLogo"]
 let clearLogo: AppSettingsModule["clearLogo"]
 let hasLogo: AppSettingsModule["hasLogo"]
+let canManageAppSettings: AppSettingsModule["canManageAppSettings"]
 let DEFAULT_APP_NAME: string
 let APP_SETTINGS_ID: string
 
@@ -56,6 +57,7 @@ beforeAll(async () => {
   setLogo = appSettingsModule.setLogo
   clearLogo = appSettingsModule.clearLogo
   hasLogo = appSettingsModule.hasLogo
+  canManageAppSettings = appSettingsModule.canManageAppSettings
   DEFAULT_APP_NAME = appSettingsModule.DEFAULT_APP_NAME
   APP_SETTINGS_ID = appSettingsModule.APP_SETTINGS_ID
 
@@ -178,5 +180,27 @@ describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
 
     expect(await getLogo()).toBeNull()
     expect(await hasLogo()).toBe(false)
+  })
+})
+
+describe("canManageAppSettings — intégration Postgres", () => {
+  // canManageAppSettings délègue à hasPermission (src/lib/auth/permissions.ts),
+  // qui résout désormais les permissions depuis `role_permission` — donc
+  // testée ici plutôt que dans app-settings.test.ts (voir son commentaire).
+  // "admin" court-circuite cette lecture (voir getPermissionsForRole), mais
+  // "member" y passe réellement : ce test vérifie donc aussi la valeur
+  // seedée par la migration 0005 (member -> settings:read, PAS settings:update).
+
+  it("autorise un administrateur", async () => {
+    expect(await canManageAppSettings({ role: "admin" })).toBe(true)
+  })
+
+  it("refuse un membre (seedé avec settings:read uniquement)", async () => {
+    expect(await canManageAppSettings({ role: "member" })).toBe(false)
+  })
+
+  it("refuse un utilisateur absent", async () => {
+    expect(await canManageAppSettings(null)).toBe(false)
+    expect(await canManageAppSettings(undefined)).toBe(false)
   })
 })

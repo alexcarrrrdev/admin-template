@@ -22,7 +22,7 @@ type ActionResult = { error?: string }
 // documentation en tête de chaque action ci-dessous).
 async function requireAppSettingsSession() {
   const session = await auth.api.getSession({ headers: await headers() })
-  if (!session || !canManageAppSettings(session.user)) {
+  if (!session || !(await canManageAppSettings(session.user))) {
     return null
   }
   return session
