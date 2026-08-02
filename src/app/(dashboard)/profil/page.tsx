@@ -2,6 +2,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
+import { getCurrentSession } from "@/lib/session"
 import { roleLabels, type Role } from "@/lib/permissions"
 import {
   ActiveSessionsCard,
@@ -22,7 +23,7 @@ function isKnownRole(role: string | null | undefined): role is Role {
 }
 
 export default async function ProfilPage() {
-  const session = await auth.api.getSession({ headers: await headers() })
+  const session = await getCurrentSession()
 
   if (!session) {
     redirect("/")

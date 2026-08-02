@@ -1,7 +1,6 @@
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { auth } from "@/lib/auth"
+import { getCurrentSession } from "@/lib/session"
 import { canManageAppSettings, getAppName } from "@/lib/app-settings"
 import { AppNameForm } from "@/components/administration/app-name-form"
 import {
@@ -18,7 +17,7 @@ import {
 // menu « Administration » soit cachée (voir src/components/app-sidebar.tsx)
 // n'est qu'un confort d'UI, pas une mesure de sécurité.
 export default async function AdministrationGeneralPage() {
-  const session = await auth.api.getSession({ headers: await headers() })
+  const session = await getCurrentSession()
 
   if (!session) {
     redirect("/")
