@@ -55,8 +55,14 @@ L'authentification (connexion, sessions, réinitialisation de mot de passe) est 
 
 En plus de `DATABASE_URL`, deux variables sont nécessaires (voir `.env.example`) :
 
-- `BETTER_AUTH_SECRET` — clé secrète servant à signer/chiffrer les sessions. Générer une valeur unique par environnement avec `openssl rand -base64 32`.
+- `BETTER_AUTH_SECRET` — clé secrète servant à signer/chiffrer les sessions, d'au moins 32 caractères. Générer une valeur unique par environnement avec `openssl rand -base64 32`.
 - `BETTER_AUTH_URL` — URL de base de l'application (ex. `http://localhost:3000` en local).
+
+Ces trois variables (avec `DATABASE_URL`) sont validées une seule fois, au démarrage, par `src/lib/env.ts` : si l'une d'elles est absente ou mal formée (ex. secret trop court, URL invalide), l'application refuse de démarrer et affiche un message d'erreur explicite listant chaque variable en cause, plutôt que d'échouer plus tard de façon confuse.
+
+### Limitation de débit (rate limiting)
+
+Les tentatives de connexion et de réinitialisation de mot de passe sont limitées par IP, en production uniquement, avec des compteurs stockés en base (table `rate_limit`, survit aux redémarrages). Deux mécanismes appliquent cette même politique, car ils couvrent deux chemins d'accès distincts : le rate limiting intégré de Better Auth (`rateLimit` dans `src/lib/auth.ts`) protège les requêtes qui passent par son routeur HTTP, tandis que `src/lib/rate-limit.ts` protège les Server Actions (`src/app/actions/auth.ts`), qui appellent l'API de Better Auth directement et contourneraient sinon entièrement cette protection.
 
 ### Créer le premier compte administrateur
 

@@ -1,10 +1,19 @@
 import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 // Tables requises par Better Auth (authentification, sessions, comptes,
-// jetons de vérification). Générées via `npx @better-auth/cli generate`
-// à partir de la configuration de src/lib/auth.ts — si cette configuration
-// change (ex. ajout d'un champ), régénérer plutôt que d'éditer à la main.
+// jetons de vérification, compteurs de limitation de débit). Générées via
+// `npx @better-auth/cli generate` à partir de la configuration de
+// src/lib/auth.ts — si cette configuration change (ex. ajout d'un champ),
+// régénérer plutôt que d'éditer à la main.
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -79,6 +88,18 @@ export const verification = pgTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
+
+// Compteurs de limitation de débit (rate limiting), stockés en base pour
+// survivre aux redémarrages et être partagés entre plusieurs instances de
+// l'application (voir rateLimit.storage: "database" dans src/lib/auth.ts).
+// Une rangée par combinaison IP + route ; Better Auth la met à jour ou la
+// recrée à chaque requête et purge périodiquement les rangées expirées.
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
 
 // Réglages globaux de l'application (ex. nom affiché dans la barre latérale),
 // gérés par un administrateur depuis /administration/general. Table à ligne
