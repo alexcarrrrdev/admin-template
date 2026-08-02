@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { getCurrentSession } from "@/lib/session"
+import { getCurrentSession } from "@/lib/auth/session"
 import { LoginForm } from "@/components/login-form"
 import {
   Card,

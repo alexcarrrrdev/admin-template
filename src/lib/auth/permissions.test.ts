@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { hasPermission, requirePermission, statement } from "@/lib/permissions"
+import { hasPermission, requirePermission, statement } from "@/lib/auth/permissions"
 
 const admin = { role: "admin" }
 const member = { role: "member" }

@@ -6,7 +6,7 @@ import { db } from "@/db"
 
 // Politique d'activation du rate limiting, PARTAGÉE entre deux mécanismes
 // distincts qui ne doivent jamais diverger :
-//   - src/lib/auth.ts (rateLimit.enabled), pour les requêtes qui passent par
+//   - src/lib/auth/index.ts (rateLimit.enabled), pour les requêtes qui passent par
 //     le routeur HTTP de Better Auth (auth.handler) ;
 //   - enforceRateLimit ci-dessous, pour les Server Actions qui appellent
 //     auth.api.* directement et contournent donc ce routeur (voir le
@@ -33,7 +33,7 @@ export type RateLimitDecision = { limited: boolean }
  * Request complet, seulement à next/headers().
  *
  * Séparée de `getClientKey` (qui lit next/headers()) pour rester testable
- * sans contexte de requête Next.js — voir src/lib/rate-limit.test.ts.
+ * sans contexte de requête Next.js — voir src/lib/auth/rate-limit.test.ts.
  */
 export function deriveClientKey(headerList: Pick<Headers, "get">): string {
   const forwardedFor = headerList.get("x-forwarded-for")
@@ -84,7 +84,7 @@ export function decideRateLimit(count: number, max: number): RateLimitDecision {
  * Exportée séparément d'`enforceRateLimit` pour permettre de tester le
  * comportement de stockage contre la vraie table, indépendamment de
  * RATE_LIMIT_ENABLED (qui désactive tout en dehors de la production) — voir
- * src/lib/rate-limit.integration.test.ts.
+ * src/lib/auth/rate-limit.integration.test.ts.
  */
 export async function consumeRateLimit(
   rule: string,

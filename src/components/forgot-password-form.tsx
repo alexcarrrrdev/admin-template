@@ -9,7 +9,7 @@ import { forgotPasswordAction } from "@/app/actions/auth"
 import {
   forgotPasswordSchema,
   type ForgotPasswordInput,
-} from "@/lib/schemas/auth"
+} from "@/lib/auth/schemas"
 import { Button } from "@/components/ui/button"
 import {
   Form,

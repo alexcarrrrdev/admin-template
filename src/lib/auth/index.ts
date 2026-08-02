@@ -6,7 +6,7 @@ import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
-import { RATE_LIMIT_ENABLED } from "@/lib/rate-limit";
+import { RATE_LIMIT_ENABLED } from "@/lib/auth/rate-limit";
 
 // Configuration serveur de Better Auth. Voir node_modules/better-auth pour
 // l'API exacte de la version installée (elle évolue vite).
@@ -22,7 +22,7 @@ export const auth = betterAuth({
   // instances). On rend ce comportement explicite plutôt que de compter sur
   // le défaut implicite :
   //   - actif uniquement en production (RATE_LIMIT_ENABLED, définie dans
-  //     src/lib/rate-limit.ts et PARTAGÉE avec enforceRateLimit — les
+  //     src/lib/auth/rate-limit.ts et PARTAGÉE avec enforceRateLimit — les
   //     Server Actions de src/app/actions/auth.ts appellent auth.api.*
   //     directement, sans passer par le routeur HTTP de Better Auth qui
   //     applique cette configuration, et ont donc besoin de leur propre
@@ -73,7 +73,7 @@ export const auth = betterAuth({
   },
   user: {
     additionalFields: {
-      // Rôle applicatif de l'utilisateur, utilisé par src/lib/permissions.ts.
+      // Rôle applicatif de l'utilisateur, utilisé par src/lib/auth/permissions.ts.
       // `input: false` : le rôle ne peut pas être fourni via l'API publique
       // (création/mise à jour d'utilisateur) ; il est toujours défini côté
       // serveur (valeur par défaut "member", ou explicitement par

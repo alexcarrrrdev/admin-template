@@ -1,6 +1,6 @@
 // Setup partagé par les projects "node" et "jsdom" (voir vitest.config.mts).
 //
-// Certains modules purement logiques (ex. src/lib/app-settings.ts) importent
+// Certains modules purement logiques (ex. src/lib/settings/app-settings.ts) importent
 // tout de même `@/db` en haut de fichier — uniquement pour son typage ou par
 // habitude d'écriture — même quand le test qui les couvre n'exerce aucune
 // requête réelle. Or `@/db` importe désormais `@/lib/env` (voir

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form"
 import { CircleAlertIcon } from "lucide-react"
 
 import { loginAction } from "@/app/actions/auth"
-import { loginSchema, type LoginInput } from "@/lib/schemas/auth"
+import { loginSchema, type LoginInput } from "@/lib/auth/schemas"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

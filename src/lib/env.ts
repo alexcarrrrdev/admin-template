@@ -59,7 +59,7 @@ export function parseEnv(input: Record<string, string | undefined>): Env {
 }
 
 // Évaluée une seule fois, au premier import de ce module (par ex. par
-// src/db/index.ts ou src/lib/auth.ts) : échoue immédiatement si
+// src/db/index.ts ou src/lib/auth/index.ts) : échoue immédiatement si
 // l'environnement est invalide, plutôt que de laisser l'erreur survenir
 // plus tard, au premier usage réel de la variable manquante.
 export const env: Readonly<Env> = Object.freeze(parseEnv(process.env))

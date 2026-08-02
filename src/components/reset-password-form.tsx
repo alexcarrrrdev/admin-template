@@ -10,7 +10,7 @@ import { resetPasswordAction } from "@/app/actions/auth"
 import {
   resetPasswordSchema,
   type ResetPasswordInput,
-} from "@/lib/schemas/auth"
+} from "@/lib/auth/schemas"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

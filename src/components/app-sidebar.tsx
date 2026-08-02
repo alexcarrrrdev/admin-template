@@ -11,7 +11,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { hasPermission } from "@/lib/permissions"
+import { hasPermission } from "@/lib/auth/permissions"
 import { NavUser } from "@/components/nav-user"
 import {
   Collapsible,

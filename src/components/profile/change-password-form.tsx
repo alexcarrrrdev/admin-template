@@ -10,7 +10,7 @@ import { changePasswordAction } from "@/app/actions/profile"
 import {
   changePasswordSchema,
   type ChangePasswordInput,
-} from "@/lib/schemas/profile"
+} from "@/lib/auth/schemas"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

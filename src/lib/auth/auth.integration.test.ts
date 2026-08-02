@@ -6,7 +6,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 // Tests d'intégration : contrairement aux autres tests (project "node" /
 // "jsdom"), ceux-ci parlent à un vrai Postgres local (voir DATABASE_URL dans
 // .env, port 5433 par défaut avec le docker-compose.yml fourni) au travers
-// de l'API serveur de Better Auth (src/lib/auth.ts) — pas via HTTP.
+// de l'API serveur de Better Auth (src/lib/auth/index.ts) — pas via HTTP.
 //
 // Ils ne sont exécutés que par `npm run test:integration` (voir
 // vitest.config.mts : project "integration", exclu de `npm test`), car ils
@@ -76,7 +76,7 @@ afterEach(async () => {
  * Crée un utilisateur de test en passant par le même chemin interne que
  * scripts/create-admin.ts (context.internalAdapter + context.password.hash),
  * plutôt que par l'API HTTP publique — qui refuse toute inscription
- * (voir emailAndPassword.disableSignUp dans src/lib/auth.ts).
+ * (voir emailAndPassword.disableSignUp dans src/lib/auth/index.ts).
  */
 async function createTestUser(
   label: string,

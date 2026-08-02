@@ -4,10 +4,10 @@ import {
   DEFAULT_APP_NAME,
   canManageAppSettings,
   resolveAppName,
-} from "@/lib/app-settings"
+} from "@/lib/settings/app-settings"
 
 // Ces tests couvrent la logique pure (repli par défaut, permission), sans
-// toucher à la base de données — voir src/lib/app-settings.integration.test.ts
+// toucher à la base de données — voir src/lib/settings/app-settings.integration.test.ts
 // pour la persistance réelle (lecture/écriture en Postgres).
 
 describe("resolveAppName", () => {

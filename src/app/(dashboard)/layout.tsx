@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
 
-import { getCurrentSession } from "@/lib/session"
-import { getAppName } from "@/lib/app-settings"
+import { getCurrentSession } from "@/lib/auth/session"
+import { getAppName } from "@/lib/settings/app-settings"
 import { AppSidebar } from "@/components/app-sidebar"
 import { TopbarTitle } from "@/components/topbar-title"
 import {
