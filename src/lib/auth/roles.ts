@@ -175,7 +175,12 @@ export async function createRole(input: CreateRoleInput): Promise<RoleDetail> {
 
   const existing = await getRole(id);
   if (existing) {
-    throw new Error(`Un rôle avec l'identifiant « ${id} » existe déjà.`);
+    // Message orienté « nom » : l'identifiant technique (dérivé du nom) n'est
+    // plus exposé dans le formulaire, il ne doit donc pas apparaître comme
+    // concept dans les messages destinés à l'utilisateur.
+    throw new Error(
+      `Un rôle au nom similaire (« ${existing.name} ») existe déjà. Choisissez un autre nom.`,
+    );
   }
 
   const description = input.description?.trim() || null;

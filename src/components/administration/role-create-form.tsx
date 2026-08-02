@@ -11,7 +11,6 @@ import type { z } from "zod"
 
 import { createRoleAction } from "@/app/actions/roles"
 import { createRoleSchema, type CreateRoleInput } from "@/lib/auth/role-schemas"
-import { slugify } from "@/lib/auth/slug"
 import {
   PermissionMatrix,
   type PermissionCatalogEntry,
@@ -28,7 +27,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -50,11 +48,6 @@ export function RoleCreateForm({ catalog }: RoleCreateFormProps) {
   const router = useRouter()
   const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Tant que l'identifiant n'a pas été modifié à la main, il suit le nom via
-  // `slugify` (voir src/lib/auth/slug.ts, la même normalisation que le
-  // serveur) — dès que l'utilisateur le modifie lui-même, on arrête de
-  // l'écraser à chaque frappe dans le champ "Nom".
-  const [slugEditedManually, setSlugEditedManually] = useState(false)
   // Trois paramètres de type (entrée du formulaire / contexte / sortie
   // validée) : `permissions` a un `.default([])` dans createRoleSchema
   // (src/lib/auth/role-schemas.ts), donc son type d'ENTRÉE (avant
@@ -66,7 +59,9 @@ export function RoleCreateForm({ catalog }: RoleCreateFormProps) {
     CreateRoleInput
   >({
     resolver: zodResolver(createRoleSchema),
-    defaultValues: { id: "", name: "", description: "", permissions: [] },
+    // Pas de champ « id » dans le formulaire : l'identifiant technique est
+    // dérivé du nom côté serveur (voir createRole dans src/lib/auth/roles.ts).
+    defaultValues: { name: "", description: "", permissions: [] },
   })
 
   async function onSubmit(values: CreateRoleInput) {
@@ -108,9 +103,7 @@ export function RoleCreateForm({ catalog }: RoleCreateFormProps) {
         <Card>
           <CardHeader>
             <CardTitle>Informations</CardTitle>
-            <CardDescription>
-              Nom, identifiant et description du rôle.
-            </CardDescription>
+            <CardDescription>Nom et description du rôle.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FormField
@@ -120,38 +113,8 @@ export function RoleCreateForm({ catalog }: RoleCreateFormProps) {
                 <FormItem>
                   <FormLabel>Nom</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      onChange={(event) => {
-                        field.onChange(event)
-                        if (!slugEditedManually) {
-                          form.setValue("id", slugify(event.target.value))
-                        }
-                      }}
-                    />
+                    <Input {...field} />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Identifiant</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      onChange={(event) => {
-                        setSlugEditedManually(true)
-                        field.onChange(event)
-                      }}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Dérivé du nom ; modifiable uniquement avant la création.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

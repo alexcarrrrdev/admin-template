@@ -162,11 +162,21 @@ describe("getRole — intégration Postgres", () => {
     expect(new Set(admin?.permissions)).toEqual(getAllPermissions())
   })
 
-  it("résout les permissions seedées du rôle member", async () => {
+  it("résout le rôle member avec ses permissions telles que stockées en base", async () => {
+    // Ne pas supposer l'état seedé (migration 0005) : member est modifiable
+    // depuis l'interface d'administration — on compare au contenu réel de
+    // role_permission au moment du test.
+    const rows = await db
+      .select({ permission: dbSchema.rolePermission.permission })
+      .from(dbSchema.rolePermission)
+      .where(eq(dbSchema.rolePermission.roleId, "member"))
+
     const member = await getRole("member")
 
     expect(member?.isSystem).toBe(true)
-    expect(new Set(member?.permissions)).toEqual(new Set(["user:read", "settings:read"]))
+    expect(new Set(member?.permissions)).toEqual(
+      new Set(rows.map((row) => row.permission)),
+    )
   })
 
   it("retourne null pour un rôle introuvable", async () => {

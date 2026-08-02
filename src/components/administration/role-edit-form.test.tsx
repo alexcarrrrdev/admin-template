@@ -79,14 +79,12 @@ beforeEach(() => {
 })
 
 describe("RoleEditForm — rôle personnalisé (modifiable)", () => {
-  it("affiche l'identifiant en lecture seule et préremplit les permissions accordées", () => {
+  it("n'expose pas l'identifiant technique et préremplit les permissions accordées", () => {
     render(
       <RoleEditForm role={comptableRole} catalog={catalog} readOnly={false} />,
     )
 
-    const idInput = screen.getByLabelText("Identifiant")
-    expect(idInput).toHaveValue("comptable")
-    expect(idInput).toBeDisabled()
+    expect(screen.queryByLabelText("Identifiant")).not.toBeInTheDocument()
     expect(actionCheckbox("Utilisateurs", "Consulter")).toBeChecked()
     expect(actionCheckbox("Paramètres", "Consulter")).toBeChecked()
     expect(actionCheckbox("Utilisateurs", "Créer")).not.toBeChecked()
@@ -97,7 +95,7 @@ describe("RoleEditForm — rôle personnalisé (modifiable)", () => {
       <RoleEditForm role={comptableRole} catalog={catalog} readOnly={false} />,
     )
 
-    expect(screen.getByRole("link", { name: "Annuler" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Annuler" })).toHaveAttribute(
       "href",
       "/administration/roles",
     )
@@ -162,7 +160,6 @@ describe("RoleEditForm — rôle admin (lecture seule)", () => {
     render(<RoleEditForm role={adminRole} catalog={catalog} readOnly />)
 
     expect(screen.getByLabelText("Nom")).toBeDisabled()
-    expect(screen.getByLabelText("Identifiant")).toBeDisabled()
     // Le Checkbox Base UI rend un <span role="checkbox"> (pas un <input>) :
     // son état désactivé s'expose via aria-disabled, pas l'attribut natif
     // `disabled` que vérifie toBeDisabled() — voir src/components/ui/checkbox.tsx.
@@ -185,7 +182,7 @@ describe("RoleEditForm — rôle admin (lecture seule)", () => {
     render(<RoleEditForm role={adminRole} catalog={catalog} readOnly />)
 
     expect(
-      screen.getByRole("link", { name: "Retour aux rôles" }),
+      screen.getByRole("button", { name: "Retour aux rôles" }),
     ).toHaveAttribute("href", "/administration/roles")
   })
 })

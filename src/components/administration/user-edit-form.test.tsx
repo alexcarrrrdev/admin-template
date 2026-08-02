@@ -82,7 +82,7 @@ describe("UserEditForm", () => {
   it("le bouton Annuler pointe vers la liste des utilisateurs", () => {
     render(<UserEditForm user={samTremblay} roles={roles} />)
 
-    expect(screen.getByRole("link", { name: "Annuler" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Annuler" })).toHaveAttribute(
       "href",
       "/administration/utilisateurs",
     )

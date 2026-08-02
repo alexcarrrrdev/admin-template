@@ -71,10 +71,19 @@ afterEach(async () => {
 })
 
 describe("getPermissionsForRole — intégration Postgres", () => {
-  it("résout les permissions seedées du rôle 'member' (migration 0005)", async () => {
+  it("résout exactement les permissions stockées en base pour 'member'", async () => {
+    // Ne PAS supposer l'état seedé par la migration 0005 : le rôle member est
+    // modifiable depuis /administration/roles, donc une base de développement
+    // peut légitimement contenir d'autres permissions. On compare à ce que la
+    // table contient réellement au moment du test.
+    const rows = await db
+      .select({ permission: dbSchema.rolePermission.permission })
+      .from(dbSchema.rolePermission)
+      .where(eq(dbSchema.rolePermission.roleId, "member"))
+
     const granted = await getPermissionsForRole("member")
 
-    expect(granted).toEqual(new Set(["user:read", "settings:read"]))
+    expect(granted).toEqual(new Set(rows.map((row) => row.permission)))
   })
 
   it("résout les permissions d'un rôle personnalisé depuis role_permission", async () => {
@@ -117,14 +126,27 @@ describe("getPermissionsForRole — intégration Postgres", () => {
 })
 
 describe("hasPermission / getGrantedPermissions — intégration Postgres", () => {
-  it("un membre a settings:read et user:read mais pas les permissions d'écriture", async () => {
-    const member = { role: "member" }
+  it("accorde exactement les permissions du rôle, ni plus ni moins", async () => {
+    // Rôle jetable aux permissions connues, plutôt que 'member' : member est
+    // modifiable depuis l'interface d'administration, son contenu réel dans
+    // une base de développement n'est donc pas un invariant de test.
+    const roleId = uniqueRoleId("verif-has-permission")
+    createdRoleIds.push(roleId)
+    await db
+      .insert(dbSchema.role)
+      .values({ id: roleId, name: "Vérification", isSystem: false })
+    await db.insert(dbSchema.rolePermission).values([
+      { roleId, permission: "settings:read" },
+      { roleId, permission: "user:read" },
+    ])
 
-    expect(await hasPermission(member, "settings", "read")).toBe(true)
-    expect(await hasPermission(member, "user", "read")).toBe(true)
-    expect(await hasPermission(member, "settings", "update")).toBe(false)
-    expect(await hasPermission(member, "user", "create")).toBe(false)
-    expect(await hasPermission(member, "role", "read")).toBe(false)
+    const holder = { role: roleId }
+
+    expect(await hasPermission(holder, "settings", "read")).toBe(true)
+    expect(await hasPermission(holder, "user", "read")).toBe(true)
+    expect(await hasPermission(holder, "settings", "update")).toBe(false)
+    expect(await hasPermission(holder, "user", "create")).toBe(false)
+    expect(await hasPermission(holder, "role", "read")).toBe(false)
   })
 
   it("un rôle inconnu n'accorde aucune permission", async () => {

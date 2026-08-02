@@ -136,7 +136,7 @@ describe("RolesTable — tableau", () => {
     renderTable()
 
     expect(
-      screen.getByRole("link", { name: /créer un rôle/i }),
+      screen.getByRole("button", { name: /créer un rôle/i }),
     ).toHaveAttribute("href", "/administration/roles/nouveau")
 
     const comptableRow = screen.getByText("Comptable").closest("tr")!

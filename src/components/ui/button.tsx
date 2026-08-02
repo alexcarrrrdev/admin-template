@@ -1,3 +1,4 @@
+import { isValidElement } from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -44,12 +45,28 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  nativeButton,
+  render,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // `nativeButton` de Base UI vaut true par défaut, ce qui déclenche un
+  // avertissement (et de mauvaises sémantiques ARIA/formulaire) dès qu'on
+  // rend autre chose qu'un <button> natif via `render` — ex.
+  // `render={<Link/>}` pour un bouton-lien. On le déduit donc du contenu de
+  // `render` : un élément qui n'est pas un <button> natif → false. Un
+  // `nativeButton` passé explicitement par l'appelant garde la priorité
+  // (nécessaire si `render` est une fonction, indécidable statiquement).
+  const resolvedNativeButton =
+    nativeButton ??
+    (render === undefined ||
+      (isValidElement(render) && render.type === "button"))
+
   return (
     <ButtonPrimitive
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
+      nativeButton={resolvedNativeButton}
+      render={render}
       {...props}
     />
   )

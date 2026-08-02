@@ -29,7 +29,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -72,10 +71,6 @@ export function RoleEditForm({ role, catalog, readOnly }: RoleEditFormProps) {
             <div className="grid gap-2">
               <Label htmlFor="role-view-name">Nom</Label>
               <Input id="role-view-name" value={role.name} disabled readOnly />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="role-view-id">Identifiant</Label>
-              <Input id="role-view-id" value={role.id} disabled readOnly />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="role-view-description">Description</Label>
@@ -178,9 +173,7 @@ function EditableRoleForm({ role, catalog }: EditableRoleFormProps) {
         <Card>
           <CardHeader>
             <CardTitle>Informations</CardTitle>
-            <CardDescription>
-              Nom, identifiant et description du rôle.
-            </CardDescription>
+            <CardDescription>Nom et description du rôle.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <FormField
@@ -196,14 +189,6 @@ function EditableRoleForm({ role, catalog }: EditableRoleFormProps) {
                 </FormItem>
               )}
             />
-            <div className="grid gap-2">
-              <Label htmlFor="role-edit-id">Identifiant</Label>
-              <Input id="role-edit-id" value={role.id} disabled readOnly />
-              <FormDescription>
-                L&apos;identifiant ne peut pas être modifié après la
-                création.
-              </FormDescription>
-            </div>
             <FormField
               control={form.control}
               name="description"

@@ -80,7 +80,7 @@ describe("UsersTable — tableau", () => {
     renderTable()
 
     expect(
-      screen.getByRole("link", { name: /créer un utilisateur/i }),
+      screen.getByRole("button", { name: /créer un utilisateur/i }),
     ).toHaveAttribute("href", "/administration/utilisateurs/nouveau")
   })
 

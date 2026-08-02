@@ -85,7 +85,7 @@ describe("RoleCreateForm — mise en page", () => {
   it("le bouton Annuler pointe vers la liste des rôles", () => {
     render(<RoleCreateForm catalog={catalog} />)
 
-    expect(screen.getByRole("link", { name: "Annuler" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Annuler" })).toHaveAttribute(
       "href",
       "/administration/roles",
     )
@@ -102,29 +102,11 @@ describe("RoleCreateForm — mise en page", () => {
   })
 })
 
-describe("RoleCreateForm — identifiant dérivé du nom", () => {
-  it("dérive l'identifiant du nom tant qu'il n'est pas modifié à la main", async () => {
-    const user = userEvent.setup()
+describe("RoleCreateForm — identifiant technique masqué", () => {
+  it("n'expose aucun champ Identifiant : le slug est dérivé côté serveur", () => {
     render(<RoleCreateForm catalog={catalog} />)
 
-    await user.type(screen.getByLabelText("Nom"), "Comptabilité Générale")
-
-    expect(screen.getByLabelText("Identifiant")).toHaveValue(
-      "comptabilite-generale",
-    )
-  })
-
-  it("arrête de dériver l'identifiant après une modification manuelle", async () => {
-    const user = userEvent.setup()
-    render(<RoleCreateForm catalog={catalog} />)
-
-    await user.type(screen.getByLabelText("Nom"), "Comptable")
-    const idInput = screen.getByLabelText("Identifiant")
-    await user.clear(idInput)
-    await user.type(idInput, "compta-custom")
-    await user.type(screen.getByLabelText("Nom"), " Senior")
-
-    expect(idInput).toHaveValue("compta-custom")
+    expect(screen.queryByLabelText("Identifiant")).not.toBeInTheDocument()
   })
 })
 
@@ -144,7 +126,8 @@ describe("RoleCreateForm — soumission", () => {
     })
     const submitted = mockedCreateRoleAction.mock.calls[0]?.[0]
     expect(submitted?.name).toBe("Comptable")
-    expect(submitted?.id).toBe("comptable")
+    // Aucun identifiant transmis : il est dérivé du nom côté serveur.
+    expect(submitted?.id).toBeUndefined()
     expect(submitted?.permissions).toHaveLength(2)
     expect(submitted?.permissions).toEqual(
       expect.arrayContaining(["user:read", "settings:read"]),
@@ -178,7 +161,7 @@ describe("RoleCreateForm — soumission", () => {
 
   it("affiche l'erreur retournée par l'action dans une alerte inline, sans naviguer", async () => {
     mockedCreateRoleAction.mockResolvedValue({
-      error: "Un rôle avec l'identifiant « comptable » existe déjà.",
+      error: "Un rôle au nom similaire (« Comptable ») existe déjà. Choisissez un autre nom.",
     })
     const user = userEvent.setup()
     render(<RoleCreateForm catalog={catalog} />)
@@ -188,7 +171,7 @@ describe("RoleCreateForm — soumission", () => {
 
     const alerte = await screen.findByRole("alert")
     expect(alerte).toHaveTextContent(
-      "Un rôle avec l'identifiant « comptable » existe déjà.",
+      "Un rôle au nom similaire (« Comptable ») existe déjà. Choisissez un autre nom.",
     )
     expect(mockToastSuccess).not.toHaveBeenCalled()
     expect(mockPush).not.toHaveBeenCalled()
