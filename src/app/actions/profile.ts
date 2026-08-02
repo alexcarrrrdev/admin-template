@@ -9,7 +9,7 @@ import {
   updateNameSchema,
   type ChangePasswordInput,
   type UpdateNameInput,
-} from "@/lib/schemas/profile"
+} from "@/lib/auth/schemas"
 
 type ActionResult = { error?: string }
 

@@ -4,7 +4,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
-import { enforceRateLimit } from "@/lib/rate-limit"
+import { enforceRateLimit } from "@/lib/auth/rate-limit"
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -12,30 +12,30 @@ import {
   type ForgotPasswordInput,
   type LoginInput,
   type ResetPasswordInput,
-} from "@/lib/schemas/auth"
+} from "@/lib/auth/schemas"
 
 type ActionResult = { error?: string }
 
 const TOO_MANY_ATTEMPTS_ERROR = "Trop de tentatives. Réessayez dans quelques minutes."
 
 // Server Actions d'authentification. Elles revalident les données avec les
-// mêmes schémas Zod que les formulaires (src/lib/schemas/auth.ts) avant
+// mêmes schémas Zod que les formulaires (src/lib/auth/schemas.ts) avant
 // d'appeler l'API serveur de Better Auth — la validation ne repose donc pas
 // uniquement sur le client.
 //
 // Limitation de débit : le rate limiting HTTP de Better Auth (rateLimit
-// dans src/lib/auth.ts) ne s'applique qu'aux requêtes qui passent par son
+// dans src/lib/auth/index.ts) ne s'applique qu'aux requêtes qui passent par son
 // routeur (auth.handler) — pas aux appels directs à auth.api.* faits ici.
 // Or une Server Action est elle-même un point d'entrée HTTP invocable
 // publiquement (Next.js expose un endpoint POST dédié pour chacune) : sans
 // limite propre, elle contournerait entièrement la protection contre le
 // bourrage d'identifiants ou de courriels. enforceRateLimit
-// (src/lib/rate-limit.ts) comble cet écart, avec les mêmes seuils que les
+// (src/lib/auth/rate-limit.ts) comble cet écart, avec les mêmes seuils que les
 // règles HTTP équivalentes et la même politique d'activation
 // (RATE_LIMIT_ENABLED, production uniquement).
 
 export async function loginAction(values: LoginInput): Promise<ActionResult> {
-  // Même seuil que la règle HTTP /sign-in/email (voir src/lib/auth.ts) :
+  // Même seuil que la règle HTTP /sign-in/email (voir src/lib/auth/index.ts) :
   // 10 tentatives par minute par IP. Vérifié avant la validation Zod, pour
   // rester cohérent avec l'ordre du routeur de Better Auth (la limite
   // s'applique avant même l'examen de la requête).

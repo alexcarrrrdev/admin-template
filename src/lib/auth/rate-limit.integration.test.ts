@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 // Tests d'intégration du rate limiting explicite, sur ses deux couches :
 //
-//   - Better Auth (rateLimit dans src/lib/auth.ts), pour les requêtes qui
+//   - Better Auth (rateLimit dans src/lib/auth/index.ts), pour les requêtes qui
 //     passent par son routeur HTTP (auth.handler). L'instance de
 //     l'application ne l'active qu'en production
 //     (rateLimit.enabled: process.env.NODE_ENV === "production"), donc elle
@@ -15,7 +15,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 //     /sign-in/email, pour observer un vrai 429 sans dizaines de
 //     tentatives.
 //
-//   - src/lib/rate-limit.ts (enforceRateLimit / consumeRateLimit), pour les
+//   - src/lib/auth/rate-limit.ts (enforceRateLimit / consumeRateLimit), pour les
 //     Server Actions (src/app/actions/auth.ts) qui appellent auth.api.*
 //     directement et contournent donc le routeur ci-dessus — voir le
 //     commentaire en tête de src/app/actions/auth.ts. `consumeRateLimit`
@@ -23,7 +23,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 //     soumise à RATE_LIMIT_ENABLED, ce qui permet d'exercer le vrai
 //     comportement de stockage sans dépendre de NODE_ENV.
 //
-// Comme src/lib/auth.integration.test.ts, ceci nécessite un vrai Postgres
+// Comme src/lib/auth/auth.integration.test.ts, ceci nécessite un vrai Postgres
 // local (voir DATABASE_URL dans .env, port 5433 par défaut) et n'est
 // exécuté que par `npm run test:integration`.
 
@@ -31,7 +31,7 @@ type AuthModule = typeof import("@/lib/auth")
 type DbModule = typeof import("@/db")
 type SchemaModule = typeof import("@/db/schema")
 type BetterAuthModule = typeof import("better-auth/minimal")
-type RateLimitModule = typeof import("@/lib/rate-limit")
+type RateLimitModule = typeof import("@/lib/auth/rate-limit")
 
 let auth: AuthModule["auth"]
 let db: DbModule["db"]
@@ -41,7 +41,7 @@ let consumeRateLimit: RateLimitModule["consumeRateLimit"]
 let decideRateLimit: RateLimitModule["decideRateLimit"]
 
 // Chemin de l'endpoint Better Auth soumis à la règle personnalisée testée
-// (voir customRules["/sign-in/email"] dans src/lib/auth.ts et ci-dessous).
+// (voir customRules["/sign-in/email"] dans src/lib/auth/index.ts et ci-dessous).
 const RATE_LIMITED_PATH = "/sign-in/email"
 
 // getIp() (node_modules/@better-auth/core/src/utils/ip.ts) retombe sur
@@ -52,7 +52,7 @@ const RATE_LIMITED_PATH = "/sign-in/email"
 const RATE_LIMIT_KEY = `127.0.0.1|${RATE_LIMITED_PATH}`
 
 // Comptes créés par les tests de ce fichier, à supprimer après coup (même
-// logique que src/lib/auth.integration.test.ts).
+// logique que src/lib/auth/auth.integration.test.ts).
 const createdUserIds: string[] = []
 
 // Clés (rule:ip) créées par les tests de consumeRateLimit dans la table
@@ -91,7 +91,7 @@ beforeAll(async () => {
     import("@/lib/env"),
     import("better-auth/minimal"),
     import("better-auth/adapters/drizzle"),
-    import("@/lib/rate-limit"),
+    import("@/lib/auth/rate-limit"),
   ])
 
   auth = authModule.auth

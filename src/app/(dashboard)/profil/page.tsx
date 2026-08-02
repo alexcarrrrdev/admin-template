@@ -2,8 +2,8 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { auth } from "@/lib/auth"
-import { getCurrentSession } from "@/lib/session"
-import { roleLabels, type Role } from "@/lib/permissions"
+import { getCurrentSession } from "@/lib/auth/session"
+import { roleLabels, type Role } from "@/lib/auth/permissions"
 import {
   ActiveSessionsCard,
   type SessionSummary,

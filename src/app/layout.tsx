@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { DEFAULT_APP_NAME, getAppName } from "@/lib/app-settings";
+import { DEFAULT_APP_NAME, getAppName } from "@/lib/settings/app-settings";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 

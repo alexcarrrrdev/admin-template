@@ -8,7 +8,7 @@ import { CircleAlertIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { updateNameAction } from "@/app/actions/profile"
-import { updateNameSchema, type UpdateNameInput } from "@/lib/schemas/profile"
+import { updateNameSchema, type UpdateNameInput } from "@/lib/auth/schemas"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

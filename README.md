@@ -62,7 +62,7 @@ Ces trois variables (avec `DATABASE_URL`) sont validées une seule fois, au dém
 
 ### Limitation de débit (rate limiting)
 
-Les tentatives de connexion et de réinitialisation de mot de passe sont limitées par IP, en production uniquement, avec des compteurs stockés en base (table `rate_limit`, survit aux redémarrages). Deux mécanismes appliquent cette même politique, car ils couvrent deux chemins d'accès distincts : le rate limiting intégré de Better Auth (`rateLimit` dans `src/lib/auth.ts`) protège les requêtes qui passent par son routeur HTTP, tandis que `src/lib/rate-limit.ts` protège les Server Actions (`src/app/actions/auth.ts`), qui appellent l'API de Better Auth directement et contourneraient sinon entièrement cette protection.
+Les tentatives de connexion et de réinitialisation de mot de passe sont limitées par IP, en production uniquement, avec des compteurs stockés en base (table `rate_limit`, survit aux redémarrages). Deux mécanismes appliquent cette même politique, car ils couvrent deux chemins d'accès distincts : le rate limiting intégré de Better Auth (`rateLimit` dans `src/lib/auth/index.ts`) protège les requêtes qui passent par son routeur HTTP, tandis que `src/lib/auth/rate-limit.ts` protège les Server Actions (`src/app/actions/auth.ts`), qui appellent l'API de Better Auth directement et contourneraient sinon entièrement cette protection.
 
 ### Créer le premier compte administrateur
 
@@ -70,7 +70,7 @@ Les tentatives de connexion et de réinitialisation de mot de passe sont limité
 npm run create-admin -- --name "Alex Caron" --email alex@exemple.com --password "MotDePasse123!"
 ```
 
-Sans arguments, le script les demande un à un de façon interactive. Il crée l'utilisateur avec le rôle `admin` (voir `src/lib/permissions.ts` pour le détail des rôles et permissions) en utilisant directement les fonctions internes de Better Auth, afin que le mot de passe soit haché exactement comme pour une connexion normale.
+Sans arguments, le script les demande un à un de façon interactive. Il crée l'utilisateur avec le rôle `admin` (voir `src/lib/auth/permissions.ts` pour le détail des rôles et permissions) en utilisant directement les fonctions internes de Better Auth, afin que le mot de passe soit haché exactement comme pour une connexion normale.
 
 ### Envoi de courriels (réinitialisation de mot de passe)
 
@@ -82,10 +82,10 @@ Pour brancher un vrai fournisseur (ex. [Resend](https://resend.com), SMTP...) en
 
 Les tests utilisent [Vitest](https://vitest.dev), avec deux « projects » configurés dans `vitest.config.mts` :
 
-- **`node`** — tests unitaires backend purs, sans base de données : `src/lib/permissions.ts` (permissions par rôle), `src/lib/schemas/auth.ts` (validation Zod) et `src/lib/email.ts`.
+- **`node`** — tests unitaires backend purs, sans base de données : `src/lib/auth/permissions.ts` (permissions par rôle), `src/lib/auth/schemas.ts` (validation Zod) et `src/lib/email.ts`.
 - **`jsdom`** — tests de composants React (DOM simulé, [Testing Library](https://testing-library.com)) : les initiales dans `src/components/nav-user.tsx` et les formulaires d'authentification (`login-form.tsx`, `forgot-password-form.tsx`, `reset-password-form.tsx`). Les Server Actions (`src/app/actions/auth.ts`) y sont simulées avec `vi.mock`, aucun de ces tests ne touche à la base de données.
 
-Un troisième project, **`integration`**, teste `src/lib/auth.ts` contre une vraie base Postgres locale (via `auth.api.signInEmail`, `signUpEmail`, etc., pas par HTTP) : création d'utilisateur, connexion, rejet de l'inscription publique, réinitialisation de mot de passe. Ces tests vivent dans des fichiers `*.integration.test.ts` et nécessitent Postgres démarré (`docker compose up -d`).
+Un troisième project, **`integration`**, teste `src/lib/auth/index.ts` contre une vraie base Postgres locale (via `auth.api.signInEmail`, `signUpEmail`, etc., pas par HTTP) : création d'utilisateur, connexion, rejet de l'inscription publique, réinitialisation de mot de passe. Ces tests vivent dans des fichiers `*.integration.test.ts` et nécessitent Postgres démarré (`docker compose up -d`).
 
 ```bash
 npm test                 # tout : node, jsdom et integration (Postgres requis)

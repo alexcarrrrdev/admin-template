@@ -2,7 +2,7 @@
  * Crée le premier compte administrateur.
  *
  * L'inscription publique est désactivée (emailAndPassword.disableSignUp
- * dans src/lib/auth.ts) : ce script est donc la façon de créer des comptes
+ * dans src/lib/auth/index.ts) : ce script est donc la façon de créer des comptes
  * pour ce template. Le mot de passe est haché avec la même fonction que
  * celle utilisée par Better Auth pour la connexion (context.password.hash),
  * en passant directement par l'adaptateur interne — pas par l'API HTTP

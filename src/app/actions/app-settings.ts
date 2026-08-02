@@ -3,11 +3,11 @@
 import { headers } from "next/headers"
 
 import { auth } from "@/lib/auth"
-import { canManageAppSettings, setAppName } from "@/lib/app-settings"
+import { canManageAppSettings, setAppName } from "@/lib/settings/app-settings"
 import {
   updateAppNameSchema,
   type UpdateAppNameInput,
-} from "@/lib/schemas/app-settings"
+} from "@/lib/settings/schemas"
 
 type ActionResult = { error?: string }
 

@@ -11,7 +11,7 @@ import { updateAppNameAction } from "@/app/actions/app-settings"
 import {
   updateAppNameSchema,
   type UpdateAppNameInput,
-} from "@/lib/schemas/app-settings"
+} from "@/lib/settings/schemas"
 import { Alert, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {

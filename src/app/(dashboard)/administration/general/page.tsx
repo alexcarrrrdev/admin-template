@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 
-import { getCurrentSession } from "@/lib/session"
-import { canManageAppSettings, getAppName } from "@/lib/app-settings"
+import { getCurrentSession } from "@/lib/auth/session"
+import { canManageAppSettings, getAppName } from "@/lib/settings/app-settings"
 import { AppNameForm } from "@/components/administration/app-name-form"
 import {
   Card,

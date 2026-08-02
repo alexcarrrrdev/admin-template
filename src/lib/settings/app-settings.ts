@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm"
 
 import { db } from "@/db"
 import { appSettings } from "@/db/schema"
-import { hasPermission } from "@/lib/permissions"
+import { hasPermission } from "@/lib/auth/permissions"
 
 // Nom de l'application par défaut, utilisé tant qu'aucun administrateur n'a
 // enregistré de nom personnalisé (voir /administration/general).

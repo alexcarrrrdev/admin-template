@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 // Tests d'intégration de la persistance des paramètres de l'application
 // (table app_settings, à ligne unique) contre un vrai Postgres local — voir
-// src/lib/auth.integration.test.ts pour le contexte général (chargement de
+// src/lib/auth/auth.integration.test.ts pour le contexte général (chargement de
 // .env, exécution via `npm run test:integration` uniquement).
 //
 // La rangée est un singleton partagé par toute l'application (y compris le
@@ -13,7 +13,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 type DbModule = typeof import("@/db")
 type SchemaModule = typeof import("@/db/schema")
-type AppSettingsModule = typeof import("@/lib/app-settings")
+type AppSettingsModule = typeof import("@/lib/settings/app-settings")
 
 let db: DbModule["db"]
 let appSettings: SchemaModule["appSettings"]
@@ -40,7 +40,7 @@ beforeAll(async () => {
   const [dbModule, schemaModule, appSettingsModule] = await Promise.all([
     import("@/db"),
     import("@/db/schema"),
-    import("@/lib/app-settings"),
+    import("@/lib/settings/app-settings"),
   ])
   db = dbModule.db
   appSettings = schemaModule.appSettings

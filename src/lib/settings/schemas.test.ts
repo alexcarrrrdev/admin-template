@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { updateAppNameSchema } from "@/lib/schemas/app-settings"
+import { updateAppNameSchema } from "@/lib/settings/schemas"
 
 describe("updateAppNameSchema", () => {
   it("accepte un nom d'application non vide", () => {

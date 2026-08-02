@@ -12,7 +12,7 @@ import {
 // Tables requises par Better Auth (authentification, sessions, comptes,
 // jetons de vérification, compteurs de limitation de débit). Générées via
 // `npx @better-auth/cli generate` à partir de la configuration de
-// src/lib/auth.ts — si cette configuration change (ex. ajout d'un champ),
+// src/lib/auth/index.ts — si cette configuration change (ex. ajout d'un champ),
 // régénérer plutôt que d'éditer à la main.
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -25,7 +25,7 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  // Rôle applicatif (voir src/lib/permissions.ts). Par défaut "member" ;
+  // Rôle applicatif (voir src/lib/auth/permissions.ts). Par défaut "member" ;
   // le premier compte "admin" est créé via `npm run create-admin`.
   role: text("role").default("member").notNull(),
 });
@@ -91,7 +91,7 @@ export const verification = pgTable(
 
 // Compteurs de limitation de débit (rate limiting), stockés en base pour
 // survivre aux redémarrages et être partagés entre plusieurs instances de
-// l'application (voir rateLimit.storage: "database" dans src/lib/auth.ts).
+// l'application (voir rateLimit.storage: "database" dans src/lib/auth/index.ts).
 // Une rangée par combinaison IP + route ; Better Auth la met à jour ou la
 // recrée à chaque requête et purge périodiquement les rangées expirées.
 export const rateLimit = pgTable("rate_limit", {
@@ -104,7 +104,7 @@ export const rateLimit = pgTable("rate_limit", {
 // Réglages globaux de l'application (ex. nom affiché dans la barre latérale),
 // gérés par un administrateur depuis /administration/general. Table à ligne
 // unique : `id` a toujours la même valeur (voir APP_SETTINGS_ID dans
-// src/lib/app-settings.ts), ce qui garantit qu'il ne peut jamais exister
+// src/lib/settings/app-settings.ts), ce qui garantit qu'il ne peut jamais exister
 // qu'une seule rangée.
 export const appSettings = pgTable("app_settings", {
   id: text("id").primaryKey(),

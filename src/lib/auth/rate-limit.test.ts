@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { decideRateLimit, deriveClientKey } from "@/lib/rate-limit"
+import { decideRateLimit, deriveClientKey } from "@/lib/auth/rate-limit"
 
-// Ces tests couvrent uniquement la logique pure de src/lib/rate-limit.ts
+// Ces tests couvrent uniquement la logique pure de src/lib/auth/rate-limit.ts
 // (décision, dérivation de la clé client), indépendamment de NODE_ENV et
 // sans toucher à la base de données — voir
-// src/lib/rate-limit.integration.test.ts pour le comportement de stockage
+// src/lib/auth/rate-limit.integration.test.ts pour le comportement de stockage
 // contre la vraie table rate_limit.
 
 describe("decideRateLimit", () => {

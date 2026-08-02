@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ChevronsUpDownIcon, LogOutIcon, Settings2Icon, UserIcon } from "lucide-react"
 
-import { signOut } from "@/lib/auth-client"
+import { signOut } from "@/lib/auth/client"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,

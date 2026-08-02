@@ -7,7 +7,7 @@ import { parseEnv } from "@/lib/env"
 // exportée par ce module (elle, basée sur process.env) est exercée
 // indirectement à chaque test de ce projet grâce à vitest.setup.env.ts, qui
 // charge .env avant l'import des modules qui en dépendent (ex.
-// src/lib/app-settings.ts, qui importe @/db).
+// src/lib/settings/app-settings.ts, qui importe @/db).
 
 const validInput = {
   DATABASE_URL: "postgresql://user:password@localhost:5433/admin_template",
