@@ -1,8 +1,7 @@
 import type { Metadata } from "next"
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { auth } from "@/lib/auth"
+import { getCurrentSession } from "@/lib/session"
 import { LoginForm } from "@/components/login-form"
 import {
   Card,
@@ -19,7 +18,7 @@ export const metadata: Metadata = {
 export default async function ConnexionPage() {
   // Si l'utilisateur a déjà une session valide, inutile de lui montrer le
   // formulaire de connexion.
-  const session = await auth.api.getSession({ headers: await headers() })
+  const session = await getCurrentSession()
 
   if (session) {
     redirect("/tableau-de-bord")
