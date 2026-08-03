@@ -38,6 +38,13 @@ export const statement = {
   // modifier leurs permissions) est lui-même une permission : voir
   // src/lib/auth/roles.ts et src/app/actions/roles.ts.
   role: ["create", "read", "update", "delete"],
+  // Consulter le journal d'audit (/administration/journal, voir
+  // src/lib/audit/audit.ts) : une seule action, "read" — le journal est
+  // write-only par conception (voir src/db/schema.ts), aucune permission
+  // create/update/delete n'a donc de sens ici. "admin" l'a automatiquement
+  // (court-circuit ci-dessous) ; aucun autre rôle ne l'a par défaut, un
+  // administrateur doit l'accorder explicitement depuis /administration/roles.
+  audit: ["read"],
 } as const;
 
 export type Resource = keyof typeof statement;
@@ -56,6 +63,7 @@ export const resourceLabels: Record<Resource, string> = {
   user: "Utilisateurs",
   settings: "Paramètres",
   role: "Rôles",
+  audit: "Journal d'audit",
 };
 
 export const actionLabels: Record<Action<Resource>, string> = {

@@ -33,6 +33,17 @@ let getAllPermissions: PermissionsModule["getAllPermissions"]
 const createdUserIds: string[] = []
 const createdRoleIds: string[] = []
 
+// Acteur des mutations de ce fichier (createRole/updateRole/deleteRole
+// prennent désormais un `actorId` en premier paramètre, pour le journal
+// d'audit — voir src/lib/audit/audit.ts). Ne correspond à AUCUN utilisateur
+// réel : `resolveActorLabel` (appelée à l'intérieur de la transaction de
+// chaque fonction) retombe alors sur "Utilisateur inconnu" plutôt que
+// d'échouer — voir son commentaire. Inutile de créer un vrai utilisateur de
+// test rien que pour être l'acteur : ces fonctions n'ont aucune logique liée
+// à SON identité (contrairement à src/lib/auth/users.ts, où l'acteur ne peut
+// pas être la cible de sa propre suppression).
+const TEST_ACTOR_ID = `test-actor-${randomUUID()}`
+
 function uniqueSuffix() {
   return randomUUID().slice(0, 6)
 }
@@ -89,6 +100,16 @@ beforeAll(async () => {
 }, 20_000)
 
 afterEach(async () => {
+  // Entrées du journal d'audit écrites par les tests qui viennent de
+  // s'exécuter (role.create/update/delete, voir src/lib/auth/roles.ts) :
+  // toutes ont TEST_ACTOR_ID comme acteur, aucune autre source n'écrit sous
+  // cet identifiant — les supprimer AVANT les rôles eux-mêmes n'a pas
+  // d'importance ici (pas de contrainte de clé étrangère entre les deux,
+  // voir le commentaire de `actorId` dans src/db/schema.ts), mais le fait
+  // dans cet ordre par cohérence avec le nettoyage utilisateurs → rôles
+  // ci-dessous.
+  await db.delete(dbSchema.auditLog).where(eq(dbSchema.auditLog.actorId, TEST_ACTOR_ID))
+
   if (auth) {
     const context = await auth.$context
     while (createdUserIds.length > 0) {
@@ -142,7 +163,7 @@ describe("listRoles — intégration Postgres", () => {
   })
 
   it("inclut un rôle personnalisé nouvellement créé, avec 0 utilisateur", async () => {
-    const created = await createRole({ name: uniqueRoleName("liste"), permissions: [] })
+    const created = await createRole(TEST_ACTOR_ID, { name: uniqueRoleName("liste"), permissions: [] })
     createdRoleIds.push(created.id)
 
     const roles = await listRoles()
@@ -187,7 +208,7 @@ describe("getRole — intégration Postgres", () => {
 describe("createRole — intégration Postgres", () => {
   it("dérive l'identifiant du nom quand aucun n'est fourni", async () => {
     const name = `Support Client ${uniqueSuffix()}`
-    const created = await createRole({ name, permissions: ["user:read"] })
+    const created = await createRole(TEST_ACTOR_ID, { name, permissions: ["user:read"] })
     createdRoleIds.push(created.id)
 
     expect(created.id).toBe(slugify(name))
@@ -200,7 +221,7 @@ describe("createRole — intégration Postgres", () => {
 
   it("accepte un identifiant fourni explicitement", async () => {
     const id = uniqueRoleId("explicit")
-    const created = await createRole({ id, name: uniqueRoleName("explicit"), permissions: [] })
+    const created = await createRole(TEST_ACTOR_ID, { id, name: uniqueRoleName("explicit"), permissions: [] })
     createdRoleIds.push(created.id)
 
     expect(created.id).toBe(id)
@@ -208,18 +229,18 @@ describe("createRole — intégration Postgres", () => {
 
   it("refuse un identifiant déjà utilisé (rôle système)", async () => {
     await expect(
-      createRole({ id: "admin", name: "Nouveau nom", permissions: [] }),
+      createRole(TEST_ACTOR_ID, { id: "admin", name: "Nouveau nom", permissions: [] }),
     ).rejects.toThrow(/existe déjà/i)
   })
 
   it("refuse une permission qui n'existe pas dans le catalogue", async () => {
     await expect(
-      createRole({ name: uniqueRoleName("perm-invalide"), permissions: ["invoice:create"] }),
+      createRole(TEST_ACTOR_ID, { name: uniqueRoleName("perm-invalide"), permissions: ["invoice:create"] }),
     ).rejects.toThrow(/permission inconnue/i)
   })
 
   it("refuse un nom vide", async () => {
-    await expect(createRole({ name: "   ", permissions: [] })).rejects.toThrow(
+    await expect(createRole(TEST_ACTOR_ID, { name: "   ", permissions: [] })).rejects.toThrow(
       /nom du rôle est requis/i,
     )
   })
@@ -227,13 +248,13 @@ describe("createRole — intégration Postgres", () => {
 
 describe("updateRole — intégration Postgres", () => {
   it("modifie le nom, la description et les permissions d'un rôle personnalisé", async () => {
-    const created = await createRole({
+    const created = await createRole(TEST_ACTOR_ID, {
       name: uniqueRoleName("modifiable"),
       permissions: ["user:read"],
     })
     createdRoleIds.push(created.id)
 
-    const updated = await updateRole(created.id, {
+    const updated = await updateRole(TEST_ACTOR_ID, created.id, {
       name: "Nom mis à jour",
       description: "Nouvelle description",
       permissions: ["user:read", "user:update"],
@@ -248,7 +269,7 @@ describe("updateRole — intégration Postgres", () => {
   })
 
   it("refuse de modifier le rôle admin", async () => {
-    await expect(updateRole("admin", { name: "Nouveau nom" })).rejects.toThrow(
+    await expect(updateRole(TEST_ACTOR_ID, "admin", { name: "Nouveau nom" })).rejects.toThrow(
       /ne peut pas être modifié/i,
     )
   })
@@ -263,12 +284,12 @@ describe("updateRole — intégration Postgres", () => {
     expect(original).not.toBeNull()
 
     try {
-      const updated = await updateRole("member", { name: "Membre (test)" })
+      const updated = await updateRole(TEST_ACTOR_ID, "member", { name: "Membre (test)" })
       expect(updated.name).toBe("Membre (test)")
       expect(updated.isSystem).toBe(true)
     } finally {
       if (original) {
-        await updateRole("member", {
+        await updateRole(TEST_ACTOR_ID, "member", {
           name: original.name,
           description: original.description,
           permissions: original.permissions,
@@ -282,16 +303,16 @@ describe("updateRole — intégration Postgres", () => {
   })
 
   it("refuse une permission inconnue", async () => {
-    const created = await createRole({ name: uniqueRoleName("update-perm-invalide"), permissions: [] })
+    const created = await createRole(TEST_ACTOR_ID, { name: uniqueRoleName("update-perm-invalide"), permissions: [] })
     createdRoleIds.push(created.id)
 
     await expect(
-      updateRole(created.id, { permissions: ["invoice:create"] }),
+      updateRole(TEST_ACTOR_ID, created.id, { permissions: ["invoice:create"] }),
     ).rejects.toThrow(/permission inconnue/i)
   })
 
   it("refuse de modifier un rôle introuvable", async () => {
-    await expect(updateRole("role-qui-nexiste-pas", { name: "X" })).rejects.toThrow(
+    await expect(updateRole(TEST_ACTOR_ID, "role-qui-nexiste-pas", { name: "X" })).rejects.toThrow(
       /introuvable/i,
     )
   })
@@ -299,32 +320,32 @@ describe("updateRole — intégration Postgres", () => {
 
 describe("deleteRole — intégration Postgres", () => {
   it("supprime un rôle personnalisé inutilisé", async () => {
-    const created = await createRole({ name: uniqueRoleName("supprimable"), permissions: [] })
+    const created = await createRole(TEST_ACTOR_ID, { name: uniqueRoleName("supprimable"), permissions: [] })
 
-    await deleteRole(created.id)
+    await deleteRole(TEST_ACTOR_ID, created.id)
 
     expect(await getRole(created.id)).toBeNull()
   })
 
   it("refuse de supprimer le rôle admin", async () => {
-    await expect(deleteRole("admin")).rejects.toThrow(/ne peut pas être supprimé/i)
+    await expect(deleteRole(TEST_ACTOR_ID, "admin")).rejects.toThrow(/ne peut pas être supprimé/i)
   })
 
   it("refuse de supprimer le rôle member", async () => {
-    await expect(deleteRole("member")).rejects.toThrow(/rôle par défaut/i)
+    await expect(deleteRole(TEST_ACTOR_ID, "member")).rejects.toThrow(/rôle par défaut/i)
   })
 
   it("refuse de supprimer un rôle introuvable", async () => {
-    await expect(deleteRole("role-qui-nexiste-pas")).rejects.toThrow(/introuvable/i)
+    await expect(deleteRole(TEST_ACTOR_ID, "role-qui-nexiste-pas")).rejects.toThrow(/introuvable/i)
   })
 
   it("refuse de supprimer un rôle encore utilisé, avec le nombre d'utilisateurs concernés", async () => {
-    const created = await createRole({ name: uniqueRoleName("utilise"), permissions: [] })
+    const created = await createRole(TEST_ACTOR_ID, { name: uniqueRoleName("utilise"), permissions: [] })
     createdRoleIds.push(created.id)
 
     await createTestUserWithRole(created.id)
 
-    await expect(deleteRole(created.id)).rejects.toThrow(/1 utilisateur/i)
+    await expect(deleteRole(TEST_ACTOR_ID, created.id)).rejects.toThrow(/1 utilisateur/i)
 
     // Toujours là malgré la tentative de suppression.
     expect(await getRole(created.id)).not.toBeNull()

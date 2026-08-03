@@ -10,6 +10,7 @@ const exactTitles: Record<string, string> = {
   "/administration/utilisateurs": "Administration – Utilisateurs",
   "/administration/roles": "Administration – Rôles",
   "/administration/general": "Administration – Général",
+  "/administration/journal": "Administration – Journal d'audit",
 }
 
 // Préfixes pour les routes imbriquées/dynamiques (pages de création et

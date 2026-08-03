@@ -92,6 +92,11 @@ const administrationNavItem: NavItem = {
       href: "/administration/general",
       requiredPermission: "settings:update",
     },
+    {
+      title: "Journal",
+      href: "/administration/journal",
+      requiredPermission: "audit:read",
+    },
   ],
 }
 

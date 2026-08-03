@@ -87,6 +87,11 @@ async function main() {
       email,
       password,
       role: "admin",
+      // Aucune session : ce script est exécuté hors de toute application
+      // (voir le commentaire d'en-tête), l'entrée du journal d'audit est
+      // donc attribuée à "Système" (voir resolveActorLabel dans
+      // src/lib/audit/audit.ts).
+      actorId: null,
     })
 
     console.log("")

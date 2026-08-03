@@ -10,14 +10,22 @@
  * (src/app/actions/users.ts), qui crée les comptes suivants depuis
  * /administration/utilisateurs.
  */
+import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { getRole } from "@/lib/auth/roles";
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit";
 
 export type CreateUserWithPasswordInput = {
   name: string;
   email: string;
   password: string;
   role: string;
+  // Auteur de la création, pour le journal d'audit (voir recordAudit
+  // ci-dessous) : `null` pour scripts/create-admin.ts (exécuté hors de
+  // toute session, avant que le premier compte n'existe) — enregistré alors
+  // comme "Système". La Server Action (src/app/actions/users.ts) passe
+  // toujours l'identifiant de l'administrateur connecté.
+  actorId: string | null;
 };
 
 export type CreatedUser = {
@@ -70,6 +78,25 @@ export async function createUserWithPassword(
     providerId: "credential",
     accountId: createdUser.id,
     password: hashedPassword,
+  });
+
+  // Enregistré APRÈS la création complète (utilisateur + compte credential
+  // liés), pas dans une transaction commune avec elles : les deux appels
+  // ci-dessus passent par l'adaptateur interne de Better Auth
+  // (context.internalAdapter), pas par notre propre `db.transaction` — il
+  // n'y a donc pas de transaction Drizzle à laquelle rattacher cette entrée
+  // (voir AuditExecutor dans src/lib/audit/audit.ts pour le mécanisme
+  // d'atomicité, utilisé ailleurs où une vraie transaction existe, ex.
+  // src/lib/auth/users.ts).
+  const actorLabel = await resolveActorLabel(db, input.actorId);
+  await recordAudit(db, {
+    actorId: input.actorId,
+    actorLabel,
+    action: "user.create",
+    targetType: "user",
+    targetId: createdUser.id,
+    targetLabel: `${createdUser.name} (${createdUser.email})`,
+    details: { role: role.id },
   });
 
   return { id: createdUser.id, name: createdUser.name, email: createdUser.email, role: role.id };

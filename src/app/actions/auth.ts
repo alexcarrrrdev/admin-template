@@ -13,6 +13,8 @@ import {
   type LoginInput,
   type ResetPasswordInput,
 } from "@/lib/auth/schemas"
+import { db } from "@/db"
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit"
 
 type ActionResult = { error?: string }
 
@@ -116,6 +118,24 @@ export async function resetPasswordAction(
     return { error: "Les mots de passe ne correspondent pas." }
   }
 
+  // `auth.api.resetPassword` (voir node_modules/better-auth/dist/api/routes/
+  // password.mjs) ne retourne que `{ status: true }` — jamais l'utilisateur
+  // concerné, donc pas moyen de résoudre l'acteur À PARTIR de son résultat.
+  // On lit donc, AVANT l'appel, la valeur (l'identifiant utilisateur) du
+  // jeton de vérification que Better Auth consommera lui-même dans
+  // `resetPassword` — via `findVerificationValue` (adaptateur interne), une
+  // lecture SANS consommation, sous le même identifiant que Better Auth
+  // utilise en interne (`reset-password:${token}`, voir
+  // requestPasswordResetCallback dans le même fichier) : le jeton reste donc
+  // valide pour l'appel `resetPassword` qui suit. Si ce jeton est déjà
+  // invalide/expiré à ce stade, `verification` est `null` — `resetPassword`
+  // échouera de toute façon juste après avec la même erreur générique.
+  const context = await auth.$context
+  const verification = await context.internalAdapter.findVerificationValue(
+    `reset-password:${token}`,
+  )
+  const actorId = typeof verification?.value === "string" ? verification.value : null
+
   try {
     await auth.api.resetPassword({
       body: { newPassword: parsed.data.password, token },
@@ -124,6 +144,16 @@ export async function resetPasswordAction(
   } catch {
     return { error: "Ce lien de réinitialisation est invalide ou a expiré." }
   }
+
+  const actorLabel = await resolveActorLabel(db, actorId)
+  await recordAudit(db, {
+    actorId,
+    actorLabel,
+    action: "auth.password.reset",
+    targetType: "user",
+    targetId: actorId,
+    targetLabel: actorLabel,
+  })
 
   redirect("/")
 }

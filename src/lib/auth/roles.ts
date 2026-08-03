@@ -21,6 +21,7 @@ import {
   type PermissionString,
 } from "@/lib/auth/permissions";
 import { SLUG_PATTERN, slugify } from "@/lib/auth/slug";
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit";
 
 // `slugify`/`SLUG_PATTERN` vivent dans src/lib/auth/slug.ts (module pur,
 // sans import de src/db/*) plutôt qu'ici : la page /administration/roles a
@@ -182,8 +183,13 @@ export type CreateRoleInput = {
  * les rôles système insérés par la migration 0005). Les permissions sont
  * validées contre le catalogue (`statement`, src/lib/auth/permissions.ts) :
  * toute chaîne qui n'y correspond pas fait échouer la création entière.
+ *
+ * `actorId` : identifiant de l'administrateur à l'origine de la création,
+ * pour le journal d'audit (voir recordAudit ci-dessous — même mécanisme que
+ * src/lib/auth/users.ts : l'exécuteur de la transaction résout lui-même le
+ * libellé de l'acteur via `resolveActorLabel`, une seule requête).
  */
-export async function createRole(input: CreateRoleInput): Promise<RoleDetail> {
+export async function createRole(actorId: string, input: CreateRoleInput): Promise<RoleDetail> {
   const name = input.name.trim();
   if (!name) {
     throw new Error("Le nom du rôle est requis.");
@@ -212,6 +218,17 @@ export async function createRole(input: CreateRoleInput): Promise<RoleDetail> {
         .insert(rolePermission)
         .values(permissions.map((permission) => ({ roleId: id, permission })));
     }
+
+    const actorLabel = await resolveActorLabel(tx, actorId);
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "role.create",
+      targetType: "role",
+      targetId: id,
+      targetLabel: `Rôle ${name}`,
+      details: { permissions },
+    });
   });
 
   return { id, name, description, isSystem: false, permissions: permissions as PermissionString[] };
@@ -230,8 +247,14 @@ export type UpdateRoleInput = {
  * on le refuse explicitement pour ne pas laisser croire le contraire).
  * "member" reste modifiable : seule sa suppression est interdite (voir
  * `deleteRole`), car c'est le rôle par défaut de tout nouvel utilisateur.
+ *
+ * `actorId` : voir le commentaire de `createRole` ci-dessus.
  */
-export async function updateRole(id: string, input: UpdateRoleInput): Promise<RoleDetail> {
+export async function updateRole(
+  actorId: string,
+  id: string,
+  input: UpdateRoleInput,
+): Promise<RoleDetail> {
   if (id === ADMIN_ROLE_ID) {
     throw new Error("Le rôle Administrateur ne peut pas être modifié.");
   }
@@ -259,6 +282,24 @@ export async function updateRole(id: string, input: UpdateRoleInput): Promise<Ro
     assertValidPermissions(permissions);
   }
 
+  // Diff avant/après pour le journal d'audit — voir
+  // src/lib/audit/format-details.ts pour son rendu dans l'interface.
+  const auditDetails: Record<string, unknown> = {};
+  if (input.name !== undefined && name !== existing.name) {
+    auditDetails.name = { before: existing.name, after: name };
+  }
+  if (input.description !== undefined && description !== existing.description) {
+    auditDetails.description = { before: existing.description, after: description };
+  }
+  if (input.permissions) {
+    const before = new Set(existing.permissions);
+    const after = new Set(permissions);
+    const added = permissions.filter((p) => !before.has(p as PermissionString));
+    const removed = existing.permissions.filter((p) => !after.has(p));
+    if (added.length > 0) auditDetails.permissionsAdded = added;
+    if (removed.length > 0) auditDetails.permissionsRemoved = removed;
+  }
+
   await db.transaction(async (tx) => {
     await tx
       .update(role)
@@ -273,6 +314,17 @@ export async function updateRole(id: string, input: UpdateRoleInput): Promise<Ro
           .values(permissions.map((permission) => ({ roleId: id, permission })));
       }
     }
+
+    const actorLabel = await resolveActorLabel(tx, actorId);
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "role.update",
+      targetType: "role",
+      targetId: id,
+      targetLabel: `Rôle ${name}`,
+      details: auditDetails,
+    });
   });
 
   return { id, name, description, isSystem: existing.isSystem, permissions: permissions as PermissionString[] };
@@ -286,8 +338,15 @@ export async function updateRole(id: string, input: UpdateRoleInput): Promise<Ro
  * voir src/db/schema.ts) ; l'erreur brute de Postgres est interceptée ici
  * pour être remplacée par un message français indiquant combien
  * d'utilisateurs bloquent la suppression.
+ *
+ * `actorId` : voir le commentaire de `createRole` ci-dessus. La suppression
+ * elle-même et son entrée d'audit sont désormais dans une transaction (elles
+ * ne l'étaient pas avant l'ajout du journal) : si la contrainte de clé
+ * étrangère bloque le DELETE, la transaction est annulée et AUCUNE entrée
+ * n'est écrite — cohérent avec `deleteUser`/`updateUser`
+ * (src/lib/auth/users.ts) et le reste des garde-fous de ce module.
  */
-export async function deleteRole(id: string): Promise<void> {
+export async function deleteRole(actorId: string, id: string): Promise<void> {
   if (id === ADMIN_ROLE_ID) {
     throw new Error("Le rôle Administrateur ne peut pas être supprimé.");
   }
@@ -303,7 +362,19 @@ export async function deleteRole(id: string): Promise<void> {
   }
 
   try {
-    await db.delete(role).where(eq(role.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(role).where(eq(role.id, id));
+
+      const actorLabel = await resolveActorLabel(tx, actorId);
+      await recordAudit(tx, {
+        actorId,
+        actorLabel,
+        action: "role.delete",
+        targetType: "role",
+        targetId: id,
+        targetLabel: `Rôle ${existing.name}`,
+      });
+    });
   } catch (error) {
     if (isForeignKeyViolation(error)) {
       const [{ count }] = await db

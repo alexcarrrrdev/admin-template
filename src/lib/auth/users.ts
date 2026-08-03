@@ -14,6 +14,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { role, session, user } from "@/db/schema";
 import { ADMIN_ROLE_ID } from "@/lib/auth/permissions";
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit";
 
 export type UserListItem = {
   id: string;
@@ -159,7 +160,7 @@ export async function updateUser(
 
   await db.transaction(async (tx) => {
     const [target] = await tx
-      .select({ id: user.id, role: user.role })
+      .select({ id: user.id, name: user.name, email: user.email, role: user.role })
       .from(user)
       .where(and(eq(user.id, id), isNull(user.deletedAt)))
       .limit(1);
@@ -168,6 +169,10 @@ export async function updateUser(
     }
 
     const patch: { name?: string; role?: string; updatedAt?: Date } = {};
+    // Diff avant/après pour le journal d'audit (voir recordAudit ci-dessous)
+    // — seulement pour les champs réellement fournis, jamais pour un champ
+    // absent de `input`.
+    const auditDetails: Record<string, { before: string; after: string }> = {};
 
     if (input.name !== undefined) {
       const name = input.name.trim();
@@ -175,6 +180,7 @@ export async function updateUser(
         throw new Error("Le nom est requis.");
       }
       patch.name = name;
+      auditDetails.name = { before: target.name, after: name };
     }
 
     if (input.role !== undefined && input.role !== target.role) {
@@ -197,12 +203,24 @@ export async function updateUser(
       }
 
       patch.role = input.role;
+      auditDetails.role = { before: target.role, after: input.role };
     }
 
     if (Object.keys(patch).length === 0) return;
 
     patch.updatedAt = new Date();
     await tx.update(user).set(patch).where(eq(user.id, id));
+
+    const actorLabel = await resolveActorLabel(tx, actingUserId);
+    await recordAudit(tx, {
+      actorId: actingUserId,
+      actorLabel,
+      action: "user.update",
+      targetType: "user",
+      targetId: id,
+      targetLabel: `${patch.name ?? target.name} (${target.email})`,
+      details: auditDetails,
+    });
   });
 }
 
@@ -243,7 +261,7 @@ export async function deleteUser(actingUserId: string, id: string): Promise<void
 
   await db.transaction(async (tx) => {
     const [target] = await tx
-      .select({ id: user.id, role: user.role })
+      .select({ id: user.id, name: user.name, email: user.email, role: user.role })
       .from(user)
       .where(and(eq(user.id, id), isNull(user.deletedAt)))
       .limit(1);
@@ -262,5 +280,15 @@ export async function deleteUser(actingUserId: string, id: string): Promise<void
 
     await tx.update(user).set({ deletedAt: new Date() }).where(eq(user.id, id));
     await tx.delete(session).where(eq(session.userId, id));
+
+    const actorLabel = await resolveActorLabel(tx, actingUserId);
+    await recordAudit(tx, {
+      actorId: actingUserId,
+      actorLabel,
+      action: "user.delete",
+      targetType: "user",
+      targetId: id,
+      targetLabel: `${target.name} (${target.email})`,
+    });
   });
 }

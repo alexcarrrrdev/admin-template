@@ -10,7 +10,10 @@ import { createRole, slugify } from "@/lib/auth/roles"
 // nom`) : ces deux cas précis lancent leur erreur AVANT le premier appel à
 // la base (voir `resolveNewRoleId`, appelée en tout début de `createRole`),
 // donc testables ici sans Postgres — pas la peine de les dupliquer dans
-// roles.integration.test.ts.
+// roles.integration.test.ts. `actorId` (premier paramètre, depuis l'ajout du
+// journal d'audit — voir src/lib/audit/audit.ts) n'a donc pas besoin de
+// correspondre à un utilisateur réel : une valeur arbitraire suffit, jamais
+// utilisée avant l'erreur.
 
 describe("slugify", () => {
   it("met en minuscules et remplace les espaces par des tirets", () => {
@@ -42,13 +45,13 @@ describe("createRole — message d'erreur du slug dérivé du nom", () => {
     // commentaire de resolveNewRoleId dans src/lib/auth/roles.ts) : le
     // message ne doit donc parler que du nom.
     await expect(
-      createRole({ name: "!!!", permissions: [] }),
+      createRole("test-actor", { name: "!!!", permissions: [] }),
     ).rejects.toThrow("Le nom du rôle doit contenir au moins une lettre ou un chiffre.")
   })
 
   it("garde le message technique pour un identifiant explicite invalide (usage script/API)", async () => {
     await expect(
-      createRole({ id: "!!!", name: "Nom valide", permissions: [] }),
+      createRole("test-actor", { id: "!!!", name: "Nom valide", permissions: [] }),
     ).rejects.toThrow(/identifiant de rôle invalide/i)
   })
 })

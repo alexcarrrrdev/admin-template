@@ -24,10 +24,11 @@ describe("statement", () => {
     // Garde-fou : si une ressource ou une action est ajoutée au catalogue
     // sans que ce test soit mis à jour, il échoue plutôt que de laisser une
     // nouvelle permission non couverte passer inaperçue.
-    expect(Object.keys(statement).sort()).toEqual(["role", "settings", "user"])
+    expect(Object.keys(statement).sort()).toEqual(["audit", "role", "settings", "user"])
     expect([...statement.user].sort()).toEqual(["create", "delete", "read", "update"])
     expect([...statement.settings].sort()).toEqual(["read", "update"])
     expect([...statement.role].sort()).toEqual(["create", "delete", "read", "update"])
+    expect([...statement.audit].sort()).toEqual(["read"])
   })
 
   it("a un libellé français pour chaque ressource et chaque action du catalogue", () => {
@@ -94,6 +95,7 @@ describe("hasPermission", () => {
     expect(await hasPermission(admin, "settings", "update")).toBe(true)
     expect(await hasPermission(admin, "role", "create")).toBe(true)
     expect(await hasPermission(admin, "role", "delete")).toBe(true)
+    expect(await hasPermission(admin, "audit", "read")).toBe(true)
   })
 
   it("retourne false pour un utilisateur absent (null ou undefined)", async () => {

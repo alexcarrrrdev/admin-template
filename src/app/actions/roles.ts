@@ -37,7 +37,7 @@ export async function createRoleAction(values: CreateRoleInput): Promise<ActionR
       return { error: parsed.error.issues[0]?.message ?? "Rôle invalide." }
     }
 
-    await createRole({
+    await createRole(session.user.id, {
       id: parsed.data.id || undefined,
       name: parsed.data.name,
       description: parsed.data.description || null,
@@ -67,7 +67,7 @@ export async function updateRoleAction(
       return { error: parsed.error.issues[0]?.message ?? "Rôle invalide." }
     }
 
-    await updateRole(id, {
+    await updateRole(session.user.id, id, {
       name: parsed.data.name,
       description: parsed.data.description || null,
       permissions: parsed.data.permissions,
@@ -87,7 +87,7 @@ export async function deleteRoleAction(id: string): Promise<ActionResult> {
 
   try {
     await requirePermission(session.user, "role", "delete")
-    await deleteRole(id)
+    await deleteRole(session.user.id, id)
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Une erreur est survenue." }
   }

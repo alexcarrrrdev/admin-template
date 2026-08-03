@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { eq, sql } from "drizzle-orm"
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
@@ -17,6 +18,7 @@ type AppSettingsModule = typeof import("@/lib/settings/app-settings")
 
 let db: DbModule["db"]
 let appSettings: SchemaModule["appSettings"]
+let auditLog: SchemaModule["auditLog"]
 let getAppName: AppSettingsModule["getAppName"]
 let setAppName: AppSettingsModule["setAppName"]
 let getLogo: AppSettingsModule["getLogo"]
@@ -37,6 +39,13 @@ type AppSettingsRow = {
 
 let originalRow: AppSettingsRow | undefined
 
+// Acteur des mutations de ce fichier (setAppName/setLogo/clearLogo prennent
+// désormais un `actorId` en premier paramètre, pour le journal d'audit —
+// voir src/lib/audit/audit.ts). Ne correspond à aucun utilisateur réel,
+// comme TEST_ACTOR_ID dans src/lib/auth/roles.integration.test.ts : ces
+// fonctions n'ont aucune logique liée à l'identité de l'acteur.
+const TEST_ACTOR_ID = `test-actor-${randomUUID()}`
+
 beforeAll(async () => {
   try {
     process.loadEnvFile()
@@ -51,6 +60,7 @@ beforeAll(async () => {
   ])
   db = dbModule.db
   appSettings = schemaModule.appSettings
+  auditLog = schemaModule.auditLog
   getAppName = appSettingsModule.getAppName
   setAppName = appSettingsModule.setAppName
   getLogo = appSettingsModule.getLogo
@@ -84,6 +94,12 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  // Entrées du journal d'audit écrites par le test qui vient de s'exécuter
+  // (settings.app_name.update / settings.logo.update / settings.logo.delete,
+  // voir src/lib/settings/app-settings.ts) : toutes ont TEST_ACTOR_ID comme
+  // acteur.
+  await db.delete(auditLog).where(eq(auditLog.actorId, TEST_ACTOR_ID))
+
   if (originalRow) {
     await db
       .insert(appSettings)
@@ -112,14 +128,14 @@ describe("app-settings — intégration Postgres", () => {
   it("écrit un nom personnalisé puis le relit", async () => {
     await db.delete(appSettings).where(eq(appSettings.id, APP_SETTINGS_ID))
 
-    await setAppName("Application de test")
+    await setAppName(TEST_ACTOR_ID, "Application de test")
 
     expect(await getAppName()).toBe("Application de test")
   })
 
   it("met à jour la rangée existante plutôt que d'en créer une nouvelle", async () => {
-    await setAppName("Premier nom")
-    await setAppName("Deuxième nom")
+    await setAppName(TEST_ACTOR_ID, "Premier nom")
+    await setAppName(TEST_ACTOR_ID, "Deuxième nom")
 
     const rows = await db
       .select()
@@ -133,7 +149,7 @@ describe("app-settings — intégration Postgres", () => {
 
 describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
   it("retourne null et faux quand aucun logo n'est enregistré", async () => {
-    await clearLogo()
+    await clearLogo(TEST_ACTOR_ID)
 
     expect(await getLogo()).toBeNull()
     expect(await hasLogo()).toBe(false)
@@ -142,7 +158,7 @@ describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
   it("enregistre un logo puis le relit avec son type MIME", async () => {
     const data = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
-    await setLogo(data, "image/png")
+    await setLogo(TEST_ACTOR_ID, data, "image/png")
 
     const logo = await getLogo()
     expect(logo).not.toBeNull()
@@ -152,8 +168,8 @@ describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
   })
 
   it("met à jour la rangée existante plutôt que d'en créer une nouvelle", async () => {
-    await setLogo(Buffer.from([1, 2, 3]), "image/png")
-    await setLogo(Buffer.from([4, 5, 6]), "image/webp")
+    await setLogo(TEST_ACTOR_ID, Buffer.from([1, 2, 3]), "image/png")
+    await setLogo(TEST_ACTOR_ID, Buffer.from([4, 5, 6]), "image/webp")
 
     const rows = await db
       .select()
@@ -166,17 +182,17 @@ describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
   })
 
   it("ne touche pas au nom de l'application déjà enregistré", async () => {
-    await setAppName("Nom conservé")
+    await setAppName(TEST_ACTOR_ID, "Nom conservé")
 
-    await setLogo(Buffer.from([1, 2, 3]), "image/png")
+    await setLogo(TEST_ACTOR_ID, Buffer.from([1, 2, 3]), "image/png")
 
     expect(await getAppName()).toBe("Nom conservé")
   })
 
   it("retire le logo enregistré", async () => {
-    await setLogo(Buffer.from([1, 2, 3]), "image/png")
+    await setLogo(TEST_ACTOR_ID, Buffer.from([1, 2, 3]), "image/png")
 
-    await clearLogo()
+    await clearLogo(TEST_ACTOR_ID)
 
     expect(await getLogo()).toBeNull()
     expect(await hasLogo()).toBe(false)

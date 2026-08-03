@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 import { db } from "@/db"
 import { appSettings } from "@/db/schema"
 import { hasPermission } from "@/lib/auth/permissions"
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit"
 
 // Nom de l'application par défaut, utilisé tant qu'aucun administrateur n'a
 // enregistré de nom personnalisé (voir /administration/general).
@@ -114,15 +115,41 @@ export async function hasLogo(): Promise<boolean> {
 /**
  * Enregistre le nom de l'application. Crée la rangée si elle n'existe pas
  * encore (premier enregistrement), sinon la met à jour.
+ *
+ * `actorId` : administrateur à l'origine du changement, pour le journal
+ * d'audit (voir recordAudit dans src/lib/audit/audit.ts). La lecture de
+ * l'ancien nom, l'écriture et l'entrée d'audit sont dans la MÊME transaction :
+ * le diff avant/après qu'elle enregistre reste ainsi garanti cohérent avec
+ * ce qui a réellement été écrit, et un échec quelconque n'y laisse aucune
+ * trace orpheline.
  */
-export async function setAppName(appName: string): Promise<void> {
-  await db
-    .insert(appSettings)
-    .values({ id: APP_SETTINGS_ID, appName })
-    .onConflictDoUpdate({
-      target: appSettings.id,
-      set: { appName, updatedAt: new Date() },
+export async function setAppName(actorId: string, appName: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ appName: appSettings.appName })
+      .from(appSettings)
+      .where(eq(appSettings.id, APP_SETTINGS_ID))
+      .limit(1)
+
+    await tx
+      .insert(appSettings)
+      .values({ id: APP_SETTINGS_ID, appName })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { appName, updatedAt: new Date() },
+      })
+
+    const actorLabel = await resolveActorLabel(tx, actorId)
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "settings.app_name.update",
+      targetType: "settings",
+      targetId: APP_SETTINGS_ID,
+      targetLabel: "Nom de l'application",
+      details: { appName: { before: resolveAppName(before), after: appName } },
     })
+  })
 }
 
 export type LogoData = {
@@ -158,31 +185,64 @@ export const getLogo = cache(async function getLogo(): Promise<LogoData | null> 
  * src/app/actions/app-settings.ts). Crée la rangée si elle n'existe pas
  * encore, avec le nom d'application par défaut (comme `setAppName`, ne
  * touche jamais à `appName` si la rangée existe déjà).
+ *
+ * `actorId` : voir le commentaire de `setAppName` ci-dessus. Le détail
+ * enregistré (type MIME + taille) ne contient JAMAIS les octets du logo
+ * lui-même — inutile pour un journal d'audit, et potentiellement volumineux.
  */
-export async function setLogo(data: Buffer, mimeType: string): Promise<void> {
-  await db
-    .insert(appSettings)
-    .values({
-      id: APP_SETTINGS_ID,
-      appName: DEFAULT_APP_NAME,
-      logo: data,
-      logoMimeType: mimeType,
+export async function setLogo(actorId: string, data: Buffer, mimeType: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(appSettings)
+      .values({
+        id: APP_SETTINGS_ID,
+        appName: DEFAULT_APP_NAME,
+        logo: data,
+        logoMimeType: mimeType,
+      })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { logo: data, logoMimeType: mimeType, updatedAt: new Date() },
+      })
+
+    const actorLabel = await resolveActorLabel(tx, actorId)
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "settings.logo.update",
+      targetType: "settings",
+      targetId: APP_SETTINGS_ID,
+      targetLabel: "Logo de l'application",
+      details: { mimeType, size: data.byteLength },
     })
-    .onConflictDoUpdate({
-      target: appSettings.id,
-      set: { logo: data, logoMimeType: mimeType, updatedAt: new Date() },
-    })
+  })
 }
 
 /**
  * Retire le logo personnalisé : l'application retombe sur l'icône par
- * défaut. Ne fait rien si aucune rangée n'existe encore (rien à effacer).
+ * défaut. Ne fait rien si aucune rangée n'existe encore (rien à effacer) —
+ * une entrée d'audit est tout de même écrite dans ce cas (voir `actorId`
+ * ci-dessous) : l'action a bien été demandée par un administrateur, même
+ * sans effet, et /administration/general n'affiche de toute façon le bouton
+ * correspondant que lorsqu'un logo existe déjà.
  */
-export async function clearLogo(): Promise<void> {
-  await db
-    .update(appSettings)
-    .set({ logo: null, logoMimeType: null, updatedAt: new Date() })
-    .where(eq(appSettings.id, APP_SETTINGS_ID))
+export async function clearLogo(actorId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(appSettings)
+      .set({ logo: null, logoMimeType: null, updatedAt: new Date() })
+      .where(eq(appSettings.id, APP_SETTINGS_ID))
+
+    const actorLabel = await resolveActorLabel(tx, actorId)
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "settings.logo.delete",
+      targetType: "settings",
+      targetId: APP_SETTINGS_ID,
+      targetLabel: "Logo de l'application",
+    })
+  })
 }
 
 type SessionUser = { role?: string | null } | null | undefined

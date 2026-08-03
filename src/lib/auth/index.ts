@@ -9,6 +9,7 @@ import * as schema from "@/db/schema";
 import { env } from "@/lib/env";
 import { sendEmail } from "@/lib/email";
 import { RATE_LIMIT_ENABLED } from "@/lib/auth/rate-limit";
+import { recordAudit, resolveActorLabel } from "@/lib/audit/audit";
 
 // Configuration serveur de Better Auth. Voir node_modules/better-auth pour
 // l'API exacte de la version installée (elle évolue vite).
@@ -131,6 +132,44 @@ export const auth = betterAuth({
               code: "INVALID_EMAIL_OR_PASSWORD",
             });
           }
+        },
+        // Journal d'audit (auth.login, voir src/lib/audit/audit.ts) : ce
+        // hook `after` est le pendant du `before` ci-dessus, DANS LE MÊME
+        // point d'entrée Better Auth (createWithHooks, voir
+        // node_modules/better-auth/dist/db/with-hooks.mjs) — il se déclenche
+        // donc pour exactement les mêmes chemins de création de session que
+        // `before` (signInEmail, y compris un appel direct à
+        // `/api/auth/sign-in/email`), vérifié empiriquement dans
+        // src/lib/audit/audit.integration.test.ts. Reçoit la session APRÈS
+        // écriture (elle a donc déjà `id`/`userId`), contrairement à
+        // `before` qui ne reçoit que les données AVANT écriture — les deux
+        // exposent `session.userId` de la même façon, c'est tout ce dont on a
+        // besoin ici.
+        //
+        // Piège à connaître : ce hook se déclenche aussi pour la session
+        // RECRÉÉE après un changement de mot de passe avec
+        // `revokeOtherSessions: true` (voir changePasswordAction,
+        // src/app/actions/profile.ts, et le commentaire de
+        // node_modules/better-auth/dist/api/routes/update-user.mjs) — un
+        // changement de mot de passe produit donc DEUX entrées de journal
+        // (auth.password.change ET auth.login) plutôt qu'une seule.
+        // Assumé : la nouvelle session EST une connexion, au sens propre du
+        // terme, même déclenchée indirectement.
+        //
+        // `resolveActorLabel`/`recordAudit` utilisent `db` directement (pas
+        // de transaction Drizzle à disposition ici : l'écriture de la
+        // session, elle, est gérée entièrement par l'adaptateur interne de
+        // Better Auth, pas par notre propre `db.transaction`).
+        after: async (session) => {
+          const actorLabel = await resolveActorLabel(db, session.userId);
+          await recordAudit(db, {
+            actorId: session.userId,
+            actorLabel,
+            action: "auth.login",
+            targetType: "user",
+            targetId: session.userId,
+            targetLabel: actorLabel,
+          });
         },
       },
     },
