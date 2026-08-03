@@ -6,6 +6,7 @@ import {
   index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
@@ -26,6 +27,50 @@ const bytea = customType<{ data: Buffer }>({
   },
 });
 
+// Rôles applicatifs, gérés dynamiquement depuis /administration/utilisateurs
+// (voir src/lib/auth/roles.ts). `id` est le slug utilisé comme valeur de
+// `user.role` ci-dessous (ex. "admin", "member", "comptable"). Deux rôles
+// « système » sont créés par la migration 0005 (voir drizzle/0005_*.sql) :
+// "admin" et "member" — ils ne peuvent pas être supprimés, et "admin" ne
+// peut pas être modifié (voir src/lib/auth/roles.ts). `is_system` distingue
+// ces rôles des rôles personnalisés créés ensuite par un administrateur.
+export const role = pgTable("role", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isSystem: boolean("is_system").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+});
+
+// Permissions accordées à chaque rôle, une rangée par couple (rôle,
+// permission). `permission` suit le format "ressource:action" (ex.
+// "user:create"), dont le catalogue complet est déclaré dans `statement`
+// (src/lib/auth/permissions.ts) — cette table ne fait qu'associer des
+// chaînes à un rôle, sans contrainte au niveau SQL sur les valeurs
+// possibles ; la validation contre le catalogue se fait dans
+// src/lib/auth/roles.ts.
+//
+// Le rôle "admin" n'a volontairement AUCUNE rangée ici : il a accès à tout
+// par un court-circuit dans le code (voir getPermissionsForRole dans
+// src/lib/auth/permissions.ts), y compris aux ressources ajoutées plus tard
+// sans migration nécessaire.
+export const rolePermission = pgTable(
+  "role_permission",
+  {
+    roleId: text("role_id")
+      .notNull()
+      .references(() => role.id, { onDelete: "cascade" }),
+    permission: text("permission").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.roleId, table.permission] }),
+  ],
+);
+
 // Tables requises par Better Auth (authentification, sessions, comptes,
 // jetons de vérification, compteurs de limitation de débit). Générées via
 // `npx @better-auth/cli generate` à partir de la configuration de
@@ -42,9 +87,24 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  // Rôle applicatif (voir src/lib/auth/permissions.ts). Par défaut "member" ;
-  // le premier compte "admin" est créé via `npm run create-admin`.
-  role: text("role").default("member").notNull(),
+  // Rôle applicatif (voir src/lib/auth/permissions.ts et
+  // src/lib/auth/roles.ts). Par défaut "member" ; le premier compte "admin"
+  // est créé via `npm run create-admin`. Référence `role.id` avec ON DELETE
+  // RESTRICT : un rôle encore utilisé par au moins un utilisateur ne peut
+  // pas être supprimé (même garde-fou appliqué en code dans
+  // src/lib/auth/roles.ts, mais imposé ici aussi au niveau base de données).
+  role: text("role")
+    .default("member")
+    .notNull()
+    .references(() => role.id, { onDelete: "restrict" }),
+  // Suppression douce (soft delete) : NULL tant que le compte est actif, ou
+  // la date de suppression sinon (voir src/lib/auth/users.ts, `deleteUser`).
+  // La rangée reste en base — ses sessions sont supprimées explicitement au
+  // moment de la suppression (voir le commentaire de `deleteUser`), et son
+  // courriel reste réservé (toujours contraint par `unique()` ci-dessus) :
+  // aucune restauration via l'interface pour l'instant, seulement une
+  // opération manuelle en base (mettre `deleted_at` à NULL).
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const session = pgTable(
@@ -141,9 +201,25 @@ export const appSettings = pgTable("app_settings", {
     .notNull(),
 });
 
-export const userRelations = relations(user, ({ many }) => ({
+export const userRelations = relations(user, ({ one, many }) => ({
   sessions: many(session),
   accounts: many(account),
+  roleRef: one(role, {
+    fields: [user.role],
+    references: [role.id],
+  }),
+}));
+
+export const roleRelations = relations(role, ({ many }) => ({
+  users: many(user),
+  permissions: many(rolePermission),
+}));
+
+export const rolePermissionRelations = relations(rolePermission, ({ one }) => ({
+  role: one(role, {
+    fields: [rolePermission.roleId],
+    references: [role.id],
+  }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({

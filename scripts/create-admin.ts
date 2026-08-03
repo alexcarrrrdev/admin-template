@@ -3,10 +3,11 @@
  *
  * L'inscription publique est désactivée (emailAndPassword.disableSignUp
  * dans src/lib/auth/index.ts) : ce script est donc la façon de créer des comptes
- * pour ce template. Le mot de passe est haché avec la même fonction que
- * celle utilisée par Better Auth pour la connexion (context.password.hash),
- * en passant directement par l'adaptateur interne — pas par l'API HTTP
- * publique, qui refuse toute inscription.
+ * pour ce template. Mince enrobage autour de createUserWithPassword
+ * (src/lib/auth/create-user.ts), qui fait le travail réel (hachage du mot de
+ * passe, création du compte "credential" via l'adaptateur interne de Better
+ * Auth) et qui est aussi utilisée par createUserAction pour les comptes
+ * suivants, créés depuis /administration/utilisateurs.
  *
  * Utilisation :
  *   npm run create-admin -- --name "Alex Caron" --email alex@exemple.com --password "MotDePasse123!"
@@ -55,7 +56,7 @@ async function main() {
     // l'environnement) : on continue avec l'environnement existant.
   }
 
-  const { auth } = await import("@/lib/auth")
+  const { createUserWithPassword } = await import("@/lib/auth/create-user")
 
   const args = parseArgs()
 
@@ -80,38 +81,26 @@ async function main() {
     process.exit(1)
   }
 
-  const context = await auth.$context
+  try {
+    const user = await createUserWithPassword({
+      name: name.trim(),
+      email,
+      password,
+      role: "admin",
+    })
 
-  const existing = await context.internalAdapter.findUserByEmail(email)
-  if (existing) {
+    console.log("")
+    console.log(
+      `Compte administrateur créé avec succès : ${user.email} (rôle : admin).`,
+    )
+    console.log("Vous pouvez maintenant vous connecter avec ce compte sur /.")
+    process.exit(0)
+  } catch (error) {
     console.error(
-      `Erreur : un compte existe déjà avec le courriel « ${email} ».`,
+      `Erreur : ${error instanceof Error ? error.message : String(error)}`,
     )
     process.exit(1)
   }
-
-  const hashedPassword = await context.password.hash(password)
-
-  const user = await context.internalAdapter.createUser({
-    name: name.trim(),
-    email,
-    emailVerified: true,
-    role: "admin",
-  })
-
-  await context.internalAdapter.linkAccount({
-    userId: user.id,
-    providerId: "credential",
-    accountId: user.id,
-    password: hashedPassword,
-  })
-
-  console.log("")
-  console.log(
-    `Compte administrateur créé avec succès : ${user.email} (rôle : admin).`,
-  )
-  console.log("Vous pouvez maintenant vous connecter avec ce compte sur /.")
-  process.exit(0)
 }
 
 main().catch((error: unknown) => {

@@ -27,7 +27,7 @@ export default async function AdministrationGeneralPage() {
     redirect("/")
   }
 
-  if (!canManageAppSettings(session.user)) {
+  if (!(await canManageAppSettings(session.user))) {
     return (
       <Card>
         <CardHeader>

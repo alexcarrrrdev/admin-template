@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { redirect } from "next/navigation"
 
+import { getGrantedPermissions } from "@/lib/auth/permissions"
 import { getCurrentSession } from "@/lib/auth/session"
 import { getAppSettingsSummary } from "@/lib/settings/app-settings"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -25,12 +26,16 @@ export default async function DashboardLayout({
     redirect("/")
   }
 
-  const { appName, hasLogo, logoVersion } = await getAppSettingsSummary()
+  const [{ appName, hasLogo, logoVersion }, permissions] = await Promise.all([
+    getAppSettingsSummary(),
+    getGrantedPermissions(session.user),
+  ])
 
   return (
     <SidebarProvider>
       <AppSidebar
         user={session.user}
+        permissions={Array.from(permissions)}
         appName={appName}
         hasLogo={hasLogo}
         logoVersion={logoVersion}

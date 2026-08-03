@@ -18,11 +18,12 @@ beforeEach(() => {
   pathname = "/tableau-de-bord"
 })
 
-function renderSidebar(role: string | null | undefined) {
+function renderSidebar(permissions: string[]) {
   return render(
     <SidebarProvider>
       <AppSidebar
-        user={{ name: "Alex Caron", email: "alex@exemple.com", role }}
+        user={{ name: "Alex Caron", email: "alex@exemple.com" }}
+        permissions={permissions}
         appName="Mon Application"
         hasLogo={false}
         logoVersion={0}
@@ -33,48 +34,69 @@ function renderSidebar(role: string | null | undefined) {
 
 describe("AppSidebar", () => {
   it("affiche le nom de l'application configuré dans l'en-tête", () => {
-    renderSidebar("admin")
+    renderSidebar(["settings:update"])
 
     expect(screen.getByText("Mon Application")).toBeInTheDocument()
   })
 
   it("affiche toujours le lien Tableau de bord", () => {
-    renderSidebar("member")
+    renderSidebar([])
 
     expect(screen.getByText("Tableau de bord")).toBeInTheDocument()
   })
 
-  it("affiche le groupe Administration pour un administrateur", () => {
-    renderSidebar("admin")
+  it("affiche le groupe Administration quand la permission settings:update est accordée", () => {
+    renderSidebar(["settings:update"])
 
     expect(screen.getByText("Administration")).toBeInTheDocument()
   })
 
   it("déplie le sous-menu quand la route courante s'y trouve", () => {
     pathname = "/administration/general"
-    renderSidebar("admin")
+    renderSidebar(["settings:update"])
 
     expect(screen.getByText("Général")).toBeInTheDocument()
   })
 
   it("garde le sous-menu replié quand la route courante est ailleurs", () => {
-    renderSidebar("admin")
+    renderSidebar(["settings:update"])
 
     expect(screen.queryByText("Général")).not.toBeInTheDocument()
   })
 
-  it("cache le groupe Administration pour un membre, qui ne peut pas modifier les paramètres", () => {
-    // Le membre a `settings:read` mais pas `settings:update` : la page
-    // « Général » lui étant refusée, le groupe entier ne doit pas s'afficher
-    // plutôt que de proposer un lien menant à un « Accès refusé ».
-    renderSidebar("member")
+  it("cache le groupe Administration sans aucune des permissions de ses entrées", () => {
+    // Aucune des trois permissions (user:read, role:read, settings:update)
+    // n'est accordée : le groupe entier ne doit pas s'afficher plutôt que
+    // de proposer un lien menant à un « Accès refusé ».
+    renderSidebar([])
 
     expect(screen.queryByText("Administration")).not.toBeInTheDocument()
   })
 
-  it("cache le groupe Administration pour un rôle inconnu", () => {
-    renderSidebar(undefined)
+  it("affiche Utilisateurs quand user:read est accordée", () => {
+    pathname = "/administration/utilisateurs"
+    renderSidebar(["user:read"])
 
-    expect(screen.queryByText("Administration")).not.toBeInTheDocument()
+    expect(screen.getByText("Administration")).toBeInTheDocument()
+    expect(screen.getByText("Utilisateurs")).toBeInTheDocument()
+  })
+
+  it("affiche Rôles quand role:read est accordée", () => {
+    pathname = "/administration/roles"
+    renderSidebar(["role:read"])
+
+    expect(screen.getByText("Administration")).toBeInTheDocument()
+    expect(screen.getByText("Rôles")).toBeInTheDocument()
+  })
+
+  it("n'affiche que les entrées correspondant aux permissions accordées", () => {
+    // user:read est accordée mais pas role:read ni settings:update : seule
+    // l'entrée Utilisateurs doit apparaître dans le sous-menu.
+    pathname = "/administration/utilisateurs"
+    renderSidebar(["user:read"])
+
+    expect(screen.getByText("Utilisateurs")).toBeInTheDocument()
+    expect(screen.queryByText("Rôles")).not.toBeInTheDocument()
+    expect(screen.queryByText("Général")).not.toBeInTheDocument()
   })
 })

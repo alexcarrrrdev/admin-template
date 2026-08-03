@@ -1,67 +1,116 @@
 import { describe, expect, it } from "vitest"
 
-import { hasPermission, requirePermission, statement } from "@/lib/auth/permissions"
+import {
+  actionLabels,
+  getAllPermissions,
+  getPermissionsForRole,
+  hasPermission,
+  isValidPermission,
+  requirePermission,
+  resourceLabels,
+  statement,
+  type Resource,
+} from "@/lib/auth/permissions"
 
-const admin = { role: "admin" }
-const member = { role: "member" }
+// Ces tests couvrent la logique PURE du module (catalogue, libellés,
+// helpers de chaînes de permission) et le court-circuit de l'administrateur
+// — qui ne touche jamais la base de données (voir getPermissionsForRole) et
+// peut donc être exercé ici en toute sécurité. La résolution réelle depuis
+// `role_permission` (rôle "member", rôle inconnu, rôle personnalisé) est
+// testée contre un vrai Postgres dans permissions.integration.test.ts.
+
+describe("statement", () => {
+  it("déclare les ressources et actions attendues", () => {
+    // Garde-fou : si une ressource ou une action est ajoutée au catalogue
+    // sans que ce test soit mis à jour, il échoue plutôt que de laisser une
+    // nouvelle permission non couverte passer inaperçue.
+    expect(Object.keys(statement).sort()).toEqual(["role", "settings", "user"])
+    expect([...statement.user].sort()).toEqual(["create", "delete", "read", "update"])
+    expect([...statement.settings].sort()).toEqual(["read", "update"])
+    expect([...statement.role].sort()).toEqual(["create", "delete", "read", "update"])
+  })
+
+  it("a un libellé français pour chaque ressource et chaque action du catalogue", () => {
+    for (const resource of Object.keys(statement) as Resource[]) {
+      expect(resourceLabels[resource], `resourceLabels.${resource}`).toBeTruthy()
+      for (const action of statement[resource]) {
+        expect(actionLabels[action], `actionLabels.${action}`).toBeTruthy()
+      }
+    }
+  })
+})
+
+describe("getAllPermissions", () => {
+  it("retourne une chaîne 'resource:action' pour chaque entrée du catalogue", () => {
+    const all = getAllPermissions()
+
+    let expectedSize = 0
+    for (const resource of Object.keys(statement) as Resource[]) {
+      for (const action of statement[resource]) {
+        expect(all.has(`${resource}:${action}`)).toBe(true)
+        expectedSize++
+      }
+    }
+    expect(all.size).toBe(expectedSize)
+  })
+})
+
+describe("isValidPermission", () => {
+  it("accepte toute permission du catalogue", () => {
+    expect(isValidPermission("user:create")).toBe(true)
+    expect(isValidPermission("settings:read")).toBe(true)
+    expect(isValidPermission("role:delete")).toBe(true)
+  })
+
+  it("refuse une chaîne qui n'est pas dans le catalogue", () => {
+    expect(isValidPermission("user:archive")).toBe(false)
+    expect(isValidPermission("invoice:create")).toBe(false)
+    expect(isValidPermission("")).toBe(false)
+  })
+})
+
+describe("getPermissionsForRole — court-circuit administrateur", () => {
+  it("retourne l'intégralité du catalogue pour 'admin', sans lecture en base", async () => {
+    const granted = await getPermissionsForRole("admin")
+
+    expect(granted).toEqual(getAllPermissions())
+  })
+
+  it("retourne un ensemble vide pour un rôle absent (null ou undefined)", async () => {
+    expect(await getPermissionsForRole(null)).toEqual(new Set())
+    expect(await getPermissionsForRole(undefined)).toEqual(new Set())
+  })
+})
 
 describe("hasPermission", () => {
-  it("accorde à l'administrateur toutes les permissions du statement", () => {
-    expect(hasPermission(admin, "user", "create")).toBe(true)
-    expect(hasPermission(admin, "user", "read")).toBe(true)
-    expect(hasPermission(admin, "user", "update")).toBe(true)
-    expect(hasPermission(admin, "user", "delete")).toBe(true)
-    expect(hasPermission(admin, "settings", "read")).toBe(true)
-    expect(hasPermission(admin, "settings", "update")).toBe(true)
+  const admin = { role: "admin" }
+
+  it("accorde à l'administrateur toutes les permissions du catalogue", async () => {
+    expect(await hasPermission(admin, "user", "create")).toBe(true)
+    expect(await hasPermission(admin, "user", "read")).toBe(true)
+    expect(await hasPermission(admin, "user", "update")).toBe(true)
+    expect(await hasPermission(admin, "user", "delete")).toBe(true)
+    expect(await hasPermission(admin, "settings", "read")).toBe(true)
+    expect(await hasPermission(admin, "settings", "update")).toBe(true)
+    expect(await hasPermission(admin, "role", "create")).toBe(true)
+    expect(await hasPermission(admin, "role", "delete")).toBe(true)
   })
 
-  it("couvre bien toutes les ressources et actions déclarées dans le statement", () => {
-    // Garde-fou : si une ressource ou une action est ajoutée à `statement`
-    // sans que ce test soit mis à jour, ce test échoue plutôt que de laisser
-    // une nouvelle permission non couverte passer inaperçue.
-    expect(Object.keys(statement).sort()).toEqual(["settings", "user"])
-    expect([...statement.user].sort()).toEqual([
-      "create",
-      "delete",
-      "read",
-      "update",
-    ])
-    expect([...statement.settings].sort()).toEqual(["read", "update"])
-  })
-
-  it("limite le membre à la lecture", () => {
-    expect(hasPermission(member, "user", "read")).toBe(true)
-    expect(hasPermission(member, "settings", "read")).toBe(true)
-
-    expect(hasPermission(member, "user", "create")).toBe(false)
-    expect(hasPermission(member, "user", "update")).toBe(false)
-    expect(hasPermission(member, "user", "delete")).toBe(false)
-    expect(hasPermission(member, "settings", "update")).toBe(false)
-  })
-
-  it("retourne false pour un rôle inconnu", () => {
-    expect(hasPermission({ role: "superadmin" }, "user", "read")).toBe(false)
-  })
-
-  it("retourne false pour un utilisateur absent (null ou undefined)", () => {
-    expect(hasPermission(null, "user", "read")).toBe(false)
-    expect(hasPermission(undefined, "user", "read")).toBe(false)
+  it("retourne false pour un utilisateur absent (null ou undefined)", async () => {
+    expect(await hasPermission(null, "user", "read")).toBe(false)
+    expect(await hasPermission(undefined, "user", "read")).toBe(false)
   })
 })
 
 describe("requirePermission", () => {
-  it("ne lance pas d'erreur quand la permission est accordée", () => {
-    expect(() => requirePermission(admin, "user", "create")).not.toThrow()
+  const admin = { role: "admin" }
+
+  it("ne lance pas d'erreur quand la permission est accordée", async () => {
+    await expect(requirePermission(admin, "user", "create")).resolves.toBeUndefined()
   })
 
-  it("lance une erreur en français quand la permission est refusée", () => {
-    expect(() => requirePermission(member, "user", "create")).toThrow(
-      /permission refusée/i,
-    )
-  })
-
-  it("lance une erreur pour un utilisateur absent", () => {
-    expect(() => requirePermission(null, "settings", "update")).toThrow(
+  it("lance une erreur en français pour un utilisateur absent", async () => {
+    await expect(requirePermission(null, "settings", "update")).rejects.toThrow(
       /permission refusée/i,
     )
   })
