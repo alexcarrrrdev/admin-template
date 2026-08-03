@@ -4,6 +4,29 @@ Projet personnel qui me sert de base commune pour tous les systèmes de gestion 
 
 Plutôt que de repartir de zéro à chaque projet client, ce template regroupe la structure et les fonctionnalités de départ que je réutilise d'un système de gestion à l'autre.
 
+## Aperçu
+
+| | |
+| :---: | :---: |
+| ![Page de connexion](docs/captures/connexion.png) | ![Gestion des utilisateurs](docs/captures/utilisateurs.png) |
+| *Connexion (nom et logo personnalisables)* | *Gestion des utilisateurs* |
+| ![Matrice de permissions d'un rôle](docs/captures/role-permissions.png) | ![Liste des rôles en mode sombre](docs/captures/roles-sombre.png) |
+| *Rôles : matrice de permissions par ressource* | *Mode sombre* |
+
+![Page de profil](docs/captures/profil.png)
+*Profil : informations, changement de mot de passe et sessions actives*
+
+## Fonctionnalités
+
+- **Authentification complète** (Better Auth) : connexion, sessions, réinitialisation de mot de passe par courriel — sans inscription publique, les comptes étant créés par un administrateur.
+- **Rôles et permissions dynamiques** : rôles créés depuis l'interface avec une matrice de permissions par ressource ; la navigation et les actions s'adaptent automatiquement aux permissions de chacun.
+- **Gestion des utilisateurs** : création, modification et suppression douce (données conservées, déconnexion immédiate) depuis la section Administration.
+- **Profil** : informations du compte, changement de mot de passe (qui déconnecte les autres appareils) et liste des sessions actives avec révocation.
+- **Identité par client** : nom de l'application et logo configurables depuis l'interface, affichés jusque sur la page de connexion — dupliquer le template, c'est surtout changer deux champs.
+- **Thème clair / sombre / système**, sans clignotement au chargement.
+- **Sécurité par défaut** : en-têtes HTTP (CSP, HSTS…), limitation de débit persistante sur la connexion, validation des variables d'environnement au démarrage, garde-fous anti-verrouillage (dernier administrateur protégé, rôle admin immuable).
+- **Tests** : unitaires, composants et intégration contre une vraie base Postgres.
+
 ## Technologies utilisées
 
 - **[Next.js](https://nextjs.org)** (App Router) — framework React full-stack : le frontend et le backend (Server Actions, Route Handlers) vivent dans le même projet, ce qui donne une seule application à déployer par client.
