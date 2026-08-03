@@ -65,6 +65,14 @@ type RolesTableProps = {
   // (accès base de données, voir le commentaire de PermissionMatrix).
   adminRoleId: string
   memberRoleId: string
+  // Permissions accordées à l'utilisateur courant ("role:create",
+  // "role:update", "role:delete"), résolues côté serveur (page
+  // /administration/roles) — même principe que `canCreate`/`canUpdate`/
+  // `canDelete` dans UsersTableProps (src/components/administration/users-table.tsx),
+  // voir son commentaire.
+  canCreate: boolean
+  canUpdate: boolean
+  canDelete: boolean
 }
 
 function countLabel(count: number, singular: string, plural: string): string {
@@ -77,9 +85,20 @@ function countLabel(count: number, singular: string, plural: string): string {
 // (/administration/roles/nouveau et /[id]) plutôt que dans des Dialog —
 // seule la suppression (une confirmation destructrice, pas un formulaire)
 // garde son AlertDialog ci-dessous.
-export function RolesTable({ roles, adminRoleId, memberRoleId }: RolesTableProps) {
+export function RolesTable({
+  roles,
+  adminRoleId,
+  memberRoleId,
+  canCreate,
+  canUpdate,
+  canDelete,
+}: RolesTableProps) {
   const router = useRouter()
   const [deletingRole, setDeletingRole] = useState<RoleRow | null>(null)
+  // Aucune des deux actions de ligne n'est accordée : la colonne "Actions"
+  // elle-même n'a plus lieu d'exister (voir le commentaire de
+  // `RolesTableProps` ci-dessus).
+  const showActionsColumn = canUpdate || canDelete
 
   return (
     <Card>
@@ -90,10 +109,12 @@ export function RolesTable({ roles, adminRoleId, memberRoleId }: RolesTableProps
             Rôles applicatifs et permissions accordées à chacun.
           </CardDescription>
         </div>
-        <Button size="sm" render={<Link href="/administration/roles/nouveau" />}>
-          <PlusIcon />
-          Créer un rôle
-        </Button>
+        {canCreate && (
+          <Button size="sm" render={<Link href="/administration/roles/nouveau" />}>
+            <PlusIcon />
+            Créer un rôle
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <TooltipProvider>
@@ -104,13 +125,23 @@ export function RolesTable({ roles, adminRoleId, memberRoleId }: RolesTableProps
                 <TableHead>Description</TableHead>
                 <TableHead>Utilisateurs</TableHead>
                 <TableHead>Permissions</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {showActionsColumn && (
+                  <TableHead className="text-right">Actions</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {roles.map((role) => {
                 const isAdmin = role.id === adminRoleId
                 const isMember = role.id === memberRoleId
+                // Actions offertes à CETTE ligne, après combinaison des
+                // permissions accordées et des règles système inchangées
+                // (admin jamais modifiable, member jamais supprimable) —
+                // peut être vide même quand `showActionsColumn` est vrai
+                // (ex. member avec seulement `role:update` accordé, aucune
+                // suppression possible pour elle de toute façon).
+                const canEditRow = !isAdmin && canUpdate
+                const canDeleteRow = !isAdmin && !isMember && canDelete
                 return (
                   <TableRow key={role.id}>
                     <TableCell>
@@ -140,55 +171,61 @@ export function RolesTable({ roles, adminRoleId, memberRoleId }: RolesTableProps
                         )
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {isAdmin ? (
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <span className="inline-flex size-8 items-center justify-center text-muted-foreground">
-                                <LockIcon className="size-4" />
-                                <span className="sr-only">
-                                  Rôle protégé
-                                </span>
-                              </span>
-                            }
-                          />
-                          <TooltipContent>
-                            Le rôle Administrateur ne peut pas être modifié.
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={
-                              <Button variant="ghost" size="icon-sm">
-                                <MoreHorizontalIcon />
-                                <span className="sr-only">
-                                  Actions pour {role.name}
-                                </span>
-                              </Button>
-                            }
-                          />
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
+                    {showActionsColumn && (
+                      <TableCell className="text-right">
+                        {isAdmin ? (
+                          <Tooltip>
+                            <TooltipTrigger
                               render={
-                                <Link href={`/administration/roles/${role.id}`} />
+                                <span className="inline-flex size-8 items-center justify-center text-muted-foreground">
+                                  <LockIcon className="size-4" />
+                                  <span className="sr-only">
+                                    Rôle protégé
+                                  </span>
+                                </span>
                               }
-                            >
-                              Modifier
-                            </DropdownMenuItem>
-                            {!isMember && (
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => setDeletingRole(role)}
-                              >
-                                Supprimer
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </TableCell>
+                            />
+                            <TooltipContent>
+                              Le rôle Administrateur ne peut pas être modifié.
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          (canEditRow || canDeleteRow) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger
+                                render={
+                                  <Button variant="ghost" size="icon-sm">
+                                    <MoreHorizontalIcon />
+                                    <span className="sr-only">
+                                      Actions pour {role.name}
+                                    </span>
+                                  </Button>
+                                }
+                              />
+                              <DropdownMenuContent align="end">
+                                {canEditRow && (
+                                  <DropdownMenuItem
+                                    render={
+                                      <Link href={`/administration/roles/${role.id}`} />
+                                    }
+                                  >
+                                    Modifier
+                                  </DropdownMenuItem>
+                                )}
+                                {canDeleteRow && (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={() => setDeletingRole(role)}
+                                  >
+                                    Supprimer
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 )
               })}

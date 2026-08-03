@@ -9,10 +9,10 @@
  * pas seulement dans les Server Actions (src/app/actions/users.ts) : un
  * appel direct à ces fonctions ne peut pas les contourner.
  */
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { role, user } from "@/db/schema";
+import { role, session, user } from "@/db/schema";
 import { ADMIN_ROLE_ID } from "@/lib/auth/permissions";
 
 export type UserListItem = {
@@ -27,6 +27,10 @@ export type UserListItem = {
 /**
  * Liste tous les utilisateurs avec le nom d'affichage de leur rôle (jointure
  * sur `role`, plutôt qu'un aller-retour séparé par utilisateur).
+ *
+ * Exclut les utilisateurs supprimés (`deleted_at` non NULL, voir
+ * `deleteUser` ci-dessous) : une suppression est douce (la rangée reste en
+ * base), mais elle ne doit apparaître nulle part dans l'interface.
  */
 export async function listUsers(): Promise<UserListItem[]> {
   return db
@@ -40,6 +44,7 @@ export async function listUsers(): Promise<UserListItem[]> {
     })
     .from(user)
     .innerJoin(role, eq(user.role, role.id))
+    .where(isNull(user.deletedAt))
     .orderBy(user.name);
 }
 
@@ -58,29 +63,62 @@ export type UserDetail = {
  * (« Utilisateur introuvable »). Pas de jointure sur `role` ici : le
  * formulaire d'édition reçoit déjà la liste complète des rôles (via
  * `listRoles()`) pour son sélecteur, il n'a pas besoin du nom d'affichage.
+ *
+ * Exclut, comme `listUsers`, les utilisateurs supprimés : un utilisateur
+ * supprimé doit apparaître comme introuvable, pas comme modifiable.
  */
 export async function getUser(id: string): Promise<UserDetail | null> {
   const [row] = await db
     .select({ id: user.id, name: user.name, email: user.email, role: user.role })
     .from(user)
-    .where(eq(user.id, id))
+    .where(and(eq(user.id, id), isNull(user.deletedAt)))
     .limit(1);
   return row ?? null;
 }
 
 /**
- * Compte les utilisateurs ayant le rôle "admin". Utilisée pour empêcher de
- * retirer le dernier accès administrateur de l'application (voir
- * `updateUser` et `deleteUser` ci-dessous).
+ * Verrouille (SELECT ... FOR UPDATE) puis compte les utilisateurs actifs
+ * (non supprimés) ayant le rôle "admin". Utilisée pour empêcher de retirer
+ * le dernier accès administrateur de l'application (voir `updateUser` et
+ * `deleteUser` ci-dessous) — DOIT être appelée à l'intérieur de la
+ * transaction qui décide de retirer le rôle admin ou de supprimer un compte
+ * admin, jamais en dehors.
+ *
+ * Le verrou (et non un simple COUNT) est ce qui ferme la course suivante
+ * (TOCTOU) : deux administrateurs A et B, exactement 2 admins au total, deux
+ * requêtes concurrentes rétrogradent/suppriment chacune un des deux. Avec un
+ * simple COUNT non verrouillé, les deux transactions peuvent lire "2 admins"
+ * AVANT que l'une des deux n'ait validé sa modification — les deux passent
+ * alors le garde-fou (adminCount > 1), et l'application se retrouve sans
+ * aucun administrateur. `FOR UPDATE` verrouille toutes les rangées
+ * actuellement admin : la seconde transaction à atteindre cette requête
+ * bloque jusqu'à ce que la première valide (ou annule), PUIS relit l'état
+ * réel des rangées verrouillées — si la première a effectivement changé le
+ * rôle de sa cible, cette rangée ne correspond plus au prédicat
+ * `role = 'admin'` et est exclue du résultat : la seconde transaction voit
+ * donc le compte À JOUR (1), pas le compte périmé (2), et refuse à son tour.
+ *
+ * `orderBy(user.id)` : verrouiller plusieurs rangées avec FOR UPDATE sans
+ * ordre garanti expose à un interblocage (deadlock) si deux transactions
+ * concurrentes les verrouillaient dans un ordre différent (A prend d'abord
+ * la rangée d'admin1, B prend d'abord celle d'admin2, chacune attend
+ * ensuite l'autre indéfiniment). Trier explicitement force TOUTE
+ * transaction qui passe par cette fonction à demander les verrous dans le
+ * même ordre : la seconde bloque toujours sur la MÊME rangée (la première
+ * du tri) que la transaction qui la précède, jamais sur une rangée
+ * différente — l'issue reste donc « une bloque, l'autre continue »,
+ * jamais un interblocage.
  */
-async function countAdmins(
+async function lockAndCountAdmins(
   executor: Pick<typeof db, "select">,
 ): Promise<number> {
-  const [row] = await executor
-    .select({ count: sql<number>`count(*)::int` })
+  const rows = await executor
+    .select({ id: user.id })
     .from(user)
-    .where(eq(user.role, ADMIN_ROLE_ID));
-  return row?.count ?? 0;
+    .where(and(eq(user.role, ADMIN_ROLE_ID), isNull(user.deletedAt)))
+    .orderBy(user.id)
+    .for("update");
+  return rows.length;
 }
 
 export type UpdateUserInput = {
@@ -101,8 +139,14 @@ export type UpdateUserInput = {
  *     admin — sans quoi l'application n'aurait plus aucun administrateur.
  *
  * La vérification du nombre d'admins et la mise à jour sont faites dans la
- * même transaction : suffisant pour ce contexte de back-office (pas de
- * verrou explicite), voir le commentaire équivalent dans `deleteUser`.
+ * même transaction, et cette vérification verrouille désormais les rangées
+ * admin concernées (voir `lockAndCountAdmins` ci-dessus) avant de compter :
+ * une simple lecture non verrouillée serait vulnérable à une course entre
+ * deux rétrogradations concurrentes (voir son commentaire pour le détail).
+ *
+ * Refuse aussi sur une cible déjà supprimée (suppression douce, voir
+ * `deleteUser`) : `deleted_at` non NULL se comporte comme un utilisateur
+ * introuvable, jamais comme un utilisateur modifiable.
  */
 export async function updateUser(
   actingUserId: string,
@@ -117,7 +161,7 @@ export async function updateUser(
     const [target] = await tx
       .select({ id: user.id, role: user.role })
       .from(user)
-      .where(eq(user.id, id))
+      .where(and(eq(user.id, id), isNull(user.deletedAt)))
       .limit(1);
     if (!target) {
       throw new Error("Cet utilisateur est introuvable.");
@@ -144,7 +188,7 @@ export async function updateUser(
       }
 
       if (target.role === ADMIN_ROLE_ID) {
-        const adminCount = await countAdmins(tx);
+        const adminCount = await lockAndCountAdmins(tx);
         if (adminCount <= 1) {
           throw new Error(
             "Impossible de retirer le rôle administrateur : c'est le dernier administrateur de l'application.",
@@ -163,12 +207,34 @@ export async function updateUser(
 }
 
 /**
- * Supprime un utilisateur. Un utilisateur ne peut pas se supprimer
- * lui-même, ni supprimer le dernier administrateur (mêmes raisons que
- * `updateUser` ci-dessus). Les sessions et comptes liés (tables `session` et
- * `account`) sont supprimés automatiquement par les contraintes ON DELETE
- * CASCADE déclarées dans src/db/schema.ts — pas besoin de les effacer
- * manuellement ici.
+ * Supprime (en douceur) un utilisateur. Un utilisateur ne peut pas se
+ * supprimer lui-même, ni supprimer le dernier administrateur (mêmes raisons
+ * que `updateUser` ci-dessus, et même verrouillage anti-course via
+ * `lockAndCountAdmins`).
+ *
+ * Suppression DOUCE plutôt qu'un DELETE : `deleted_at` est simplement posé à
+ * la date courante, la rangée `user` reste en base (voir son commentaire
+ * dans src/db/schema.ts). Deux conséquences traitées explicitement, dans la
+ * MÊME transaction :
+ *   - la contrainte ON DELETE CASCADE de `session` (déclarée dans
+ *     src/db/schema.ts) ne se déclenche que sur un vrai DELETE de la rangée
+ *     `user` — puisqu'elle n'est plus supprimée, elle ne se déclenche plus.
+ *     On supprime donc les sessions explicitement ci-dessous : un compte
+ *     désactivé ne doit plus pouvoir naviguer l'application avec une session
+ *     déjà ouverte, et ce IMMÉDIATEMENT (pas seulement à l'expiration
+ *     naturelle de la session) ;
+ *   - `account` (mot de passe haché) N'EST PAS supprimé : il n'a pas besoin
+ *     de l'être pour empêcher la connexion (voir le hook
+ *     `databaseHooks.session.create.before` dans src/lib/auth/index.ts, qui
+ *     bloque la création de session pour un utilisateur supprimé avant même
+ *     que le mot de passe ne soit vérifié) — le conserver permet une
+ *     éventuelle restauration manuelle (mettre `deleted_at` à NULL en base)
+ *     sans devoir recréer le compte credential.
+ *
+ * Le courriel de la cible reste réservé (contrainte `unique()` sur
+ * `user.email`, voir src/db/schema.ts) : voir le commentaire de
+ * `createUserWithPassword` (src/lib/auth/create-user.ts) pour ce compromis
+ * assumé.
  */
 export async function deleteUser(actingUserId: string, id: string): Promise<void> {
   if (id === actingUserId) {
@@ -179,14 +245,14 @@ export async function deleteUser(actingUserId: string, id: string): Promise<void
     const [target] = await tx
       .select({ id: user.id, role: user.role })
       .from(user)
-      .where(eq(user.id, id))
+      .where(and(eq(user.id, id), isNull(user.deletedAt)))
       .limit(1);
     if (!target) {
       throw new Error("Cet utilisateur est introuvable.");
     }
 
     if (target.role === ADMIN_ROLE_ID) {
-      const adminCount = await countAdmins(tx);
+      const adminCount = await lockAndCountAdmins(tx);
       if (adminCount <= 1) {
         throw new Error(
           "Impossible de supprimer ce compte : c'est le dernier administrateur de l'application.",
@@ -194,6 +260,7 @@ export async function deleteUser(actingUserId: string, id: string): Promise<void
       }
     }
 
-    await tx.delete(user).where(eq(user.id, id));
+    await tx.update(user).set({ deletedAt: new Date() }).where(eq(user.id, id));
+    await tx.delete(session).where(eq(session.userId, id));
   });
 }

@@ -19,9 +19,11 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 type AuthModule = typeof import("@/lib/auth")
 type DbModule = typeof import("@/db")
+type UsersModule = typeof import("@/lib/auth/users")
 
 let auth: AuthModule["auth"]
 let db: DbModule["db"]
+let deleteUser: UsersModule["deleteUser"]
 
 // Comptes créés par les tests de ce fichier, à supprimer après coup. Chaque
 // test crée son propre utilisateur avec un courriel unique (voir
@@ -43,12 +45,14 @@ beforeAll(async () => {
     // scripts/create-admin.ts.
   }
 
-  const [authModule, dbModule] = await Promise.all([
+  const [authModule, dbModule, usersModule] = await Promise.all([
     import("@/lib/auth"),
     import("@/db"),
+    import("@/lib/auth/users"),
   ])
   auth = authModule.auth
   db = dbModule.db
+  deleteUser = usersModule.deleteUser
 
   try {
     await db.execute(sql`select 1`)
@@ -126,6 +130,44 @@ describe("Better Auth — intégration Postgres", () => {
         headers: new Headers(),
       }),
     ).rejects.toThrow()
+  })
+
+  it("signInEmail échoue pour un utilisateur supprimé, même avec le bon mot de passe (databaseHooks.session.create.before)", async () => {
+    // Preuve empirique que le blocage vit DANS Better Auth (le hook
+    // `databaseHooks.session.create.before` de src/lib/auth/index.ts), pas
+    // seulement dans la Server Action de connexion (src/app/actions/auth.ts) :
+    // ce test appelle `auth.api.signInEmail` directement, exactement comme le
+    // ferait le point d'entrée HTTP public `/api/auth/sign-in/email` (voir
+    // src/app/api/auth/[...all]/route.ts) — sans passer par la Server Action.
+    const user = await createTestUser("signin-deleted", "MotDePasse123!")
+    const actor = await createTestUser("signin-deleted-actor", "MotDePasse123!", "admin")
+
+    // D'abord, la connexion réussit normalement : isole l'effet de la
+    // suppression ci-dessous d'un éventuel problème de compte mal créé.
+    await expect(
+      auth.api.signInEmail({
+        body: { email: user.email, password: user.password },
+        headers: new Headers(),
+      }),
+    ).resolves.toBeDefined()
+
+    await deleteUser(actor.id, user.id)
+
+    // Même mot de passe, toujours correct : si l'échec ci-dessous se
+    // produisait pour une autre raison qu'un compte supprimé (ex. mot de
+    // passe changé entretemps), ce test ne prouverait rien.
+    await expect(
+      auth.api.signInEmail({
+        body: { email: user.email, password: user.password },
+        headers: new Headers(),
+      }),
+    ).rejects.toThrow()
+
+    // Aucune session n'a été créée malgré tout (le hook a bien empêché
+    // l'écriture, pas seulement fait échouer l'appel après coup).
+    const context = await auth.$context
+    const sessions = await context.internalAdapter.listSessions(user.id)
+    expect(sessions).toHaveLength(0)
   })
 
   it("signUpEmail est refusé car l'inscription publique est désactivée", async () => {

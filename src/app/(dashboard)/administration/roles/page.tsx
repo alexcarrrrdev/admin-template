@@ -41,7 +41,12 @@ export default async function AdministrationRolesPage() {
     )
   }
 
-  const roleList = await listRoles()
+  const [roleList, canCreate, canUpdate, canDelete] = await Promise.all([
+    listRoles(),
+    hasPermission(session.user, "role", "create"),
+    hasPermission(session.user, "role", "update"),
+    hasPermission(session.user, "role", "delete"),
+  ])
 
   // `listRoles()` ne renvoie volontairement pas les permissions de chaque
   // rôle (voir son commentaire dans src/lib/auth/roles.ts) : cette page en a
@@ -65,6 +70,9 @@ export default async function AdministrationRolesPage() {
       roles={roles}
       adminRoleId={ADMIN_ROLE_ID}
       memberRoleId={MEMBER_ROLE_ID}
+      canCreate={canCreate}
+      canUpdate={canUpdate}
+      canDelete={canDelete}
     />
   )
 }

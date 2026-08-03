@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { and, eq, inArray, ne, sql } from "drizzle-orm"
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 // Tests d'intégration de la gestion des utilisateurs (src/lib/auth/users.ts
@@ -24,6 +24,7 @@ let dbSchema: SchemaModule
 let updateUser: UsersModule["updateUser"]
 let deleteUser: UsersModule["deleteUser"]
 let getUser: UsersModule["getUser"]
+let listUsers: UsersModule["listUsers"]
 let createUserWithPassword: CreateUserModule["createUserWithPassword"]
 
 // Comptes créés par les tests de ce fichier, à supprimer après coup — même
@@ -56,6 +57,7 @@ beforeAll(async () => {
   updateUser = usersModule.updateUser
   deleteUser = usersModule.deleteUser
   getUser = usersModule.getUser
+  listUsers = usersModule.listUsers
   createUserWithPassword = createUserModule.createUserWithPassword
 
   try {
@@ -110,7 +112,7 @@ async function createTestUser(label: string, role: "admin" | "member") {
 }
 
 /**
- * Rend `soloAdminId` temporairement seul détenteur du rôle "admin" en
+ * Rend `keepAdminIds` temporairement les SEULS détenteurs du rôle "admin" en
  * rétrogradant tout autre administrateur existant (y compris, potentiellement,
  * le compte de développement) le temps d'exécuter `fn`, puis restaure
  * systématiquement leur rôle d'origine — même si `fn` lance une erreur.
@@ -118,19 +120,22 @@ async function createTestUser(label: string, role: "admin" | "member") {
  * Nécessaire pour tester le garde-fou du dernier administrateur (voir
  * src/lib/auth/users.ts) : ce garde-fou compte les admins sur TOUTE la table
  * `user`, pas seulement les comptes créés par ce fichier — impossible de
- * placer un utilisateur de test en position de "dernier admin" sans y
- * toucher. Même technique que app-settings.integration.test.ts (capture de
- * l'état réel avant modification, restauration inconditionnelle après) —
- * voir son commentaire d'en-tête.
+ * placer un utilisateur de test en position de "dernier admin" (ou de
+ * "avant-dernier", pour le test de concurrence ci-dessous) sans y toucher.
+ * Même technique que app-settings.integration.test.ts (capture de l'état
+ * réel avant modification, restauration inconditionnelle après) — voir son
+ * commentaire d'en-tête.
  */
-async function withSingleAdmin<T>(
-  soloAdminId: string,
+async function withOnlyAdmins<T>(
+  keepAdminIds: string[],
   fn: () => Promise<T>,
 ): Promise<T> {
   const otherAdmins = await db
     .select({ id: dbSchema.user.id })
     .from(dbSchema.user)
-    .where(and(eq(dbSchema.user.role, "admin"), ne(dbSchema.user.id, soloAdminId)))
+    .where(
+      and(eq(dbSchema.user.role, "admin"), notInArray(dbSchema.user.id, keepAdminIds)),
+    )
 
   const otherAdminIds = otherAdmins.map((row) => row.id)
 
@@ -151,6 +156,11 @@ async function withSingleAdmin<T>(
         .where(inArray(dbSchema.user.id, otherAdminIds))
     }
   }
+}
+
+/** Cas à un seul admin restant : voir `withOnlyAdmins` ci-dessus. */
+function withSingleAdmin<T>(soloAdminId: string, fn: () => Promise<T>): Promise<T> {
+  return withOnlyAdmins([soloAdminId], fn)
 }
 
 describe("createUserWithPassword — intégration Postgres", () => {
@@ -264,6 +274,17 @@ describe("updateUser — intégration Postgres", () => {
     ).rejects.toThrow(/introuvable/i)
   })
 
+  it("refuse de modifier un utilisateur supprimé (suppression douce) : traité comme introuvable", async () => {
+    const target = await createTestUser("update-deleted-target", "member")
+    const actor = await createTestUser("update-deleted-target-actor", "admin")
+
+    await deleteUser(actor.id, target.id)
+
+    await expect(
+      updateUser(actor.id, target.id, { name: "Nouveau nom" }),
+    ).rejects.toThrow(/introuvable/i)
+  })
+
   it("permet de retirer le rôle administrateur quand ce n'est pas le dernier", async () => {
     const extraAdmin = await createTestUser("extra-admin", "admin")
     const actor = await createTestUser("extra-admin-actor", "member")
@@ -298,17 +319,60 @@ describe("updateUser — intégration Postgres", () => {
 })
 
 describe("deleteUser — intégration Postgres", () => {
-  it("supprime un utilisateur", async () => {
+  it("supprime EN DOUCEUR un utilisateur : la rangée reste, deleted_at est posé", async () => {
     const target = await createTestUser("delete-member", "member")
     const actor = await createTestUser("delete-member-actor", "admin")
 
+    const before = new Date()
     await deleteUser(actor.id, target.id)
 
     const [row] = await db
       .select()
       .from(dbSchema.user)
       .where(eq(dbSchema.user.id, target.id))
-    expect(row).toBeUndefined()
+    expect(row).toBeDefined()
+    expect(row?.deletedAt).toBeInstanceOf(Date)
+    expect(row!.deletedAt!.getTime()).toBeGreaterThanOrEqual(before.getTime())
+  })
+
+  it("révoque immédiatement toutes les sessions actives de l'utilisateur supprimé", async () => {
+    const target = await createTestUser("delete-sessions", "member")
+    const actor = await createTestUser("delete-sessions-actor", "admin")
+
+    // Deux connexions actives, comme deux appareils (même technique que
+    // src/lib/auth/auth.integration.test.ts).
+    await auth.api.signInEmail({
+      body: { email: target.email, password: "MotDePasse123!" },
+      headers: new Headers(),
+    })
+    await auth.api.signInEmail({
+      body: { email: target.email, password: "MotDePasse123!" },
+      headers: new Headers(),
+    })
+
+    const sessionsBefore = await db
+      .select({ id: dbSchema.session.id })
+      .from(dbSchema.session)
+      .where(eq(dbSchema.session.userId, target.id))
+    expect(sessionsBefore.length).toBeGreaterThanOrEqual(2)
+
+    await deleteUser(actor.id, target.id)
+
+    const sessionsAfter = await db
+      .select({ id: dbSchema.session.id })
+      .from(dbSchema.session)
+      .where(eq(dbSchema.session.userId, target.id))
+    expect(sessionsAfter).toHaveLength(0)
+  })
+
+  it("retire l'utilisateur supprimé de listUsers", async () => {
+    const target = await createTestUser("delete-listed", "member")
+    const actor = await createTestUser("delete-listed-actor", "admin")
+
+    await deleteUser(actor.id, target.id)
+
+    const users = await listUsers()
+    expect(users.some((u) => u.id === target.id)).toBe(false)
   })
 
   it("refuse qu'un utilisateur se supprime lui-même", async () => {
@@ -323,6 +387,15 @@ describe("deleteUser — intégration Postgres", () => {
     await expect(deleteUser(actor.id, "id-qui-nexiste-pas")).rejects.toThrow(
       /introuvable/i,
     )
+  })
+
+  it("refuse de supprimer un utilisateur déjà supprimé (traité comme introuvable)", async () => {
+    const target = await createTestUser("delete-twice", "member")
+    const actor = await createTestUser("delete-twice-actor", "admin")
+
+    await deleteUser(actor.id, target.id)
+
+    await expect(deleteUser(actor.id, target.id)).rejects.toThrow(/introuvable/i)
   })
 
   it("refuse de supprimer le dernier administrateur", async () => {
@@ -340,6 +413,31 @@ describe("deleteUser — intégration Postgres", () => {
       .from(dbSchema.user)
       .where(eq(dbSchema.user.id, soloAdmin.id))
     expect(row).toBeDefined()
+  })
+
+  it("un administrateur supprimé ne compte plus comme administrateur (dernier administrateur ignore les comptes supprimés)", async () => {
+    const remainingAdmin = await createTestUser("last-admin-excl-remaining", "admin")
+    const actor = await createTestUser("last-admin-excl-actor", "member")
+
+    await withSingleAdmin(remainingAdmin.id, async () => {
+      // Avec `remainingAdmin` seul admin réel (les autres sont temporairement
+      // rétrogradés par withSingleAdmin), on crée un second admin JETABLE
+      // pour former une paire de 2 administrateurs actifs.
+      const otherAdmin = await createTestUser("last-admin-excl-other", "admin")
+
+      // Le supprimer (suppression douce) laisse sa rangée `role = 'admin'`
+      // intacte en base — seul `deleted_at` change (voir deleteUser
+      // ci-dessus). Si le calcul du dernier administrateur ne filtrait pas
+      // les comptes supprimés, `remainingAdmin` semblerait encore avoir un
+      // collègue administrateur actif : ce test échouerait alors en refusant
+      // l'assertion ci-dessous (la suppression de `remainingAdmin`
+      // réussirait au lieu d'être bloquée).
+      await deleteUser(actor.id, otherAdmin.id)
+
+      await expect(deleteUser(actor.id, remainingAdmin.id)).rejects.toThrow(
+        /dernier administrateur/i,
+      )
+    })
   })
 })
 
@@ -359,5 +457,93 @@ describe("getUser — intégration Postgres", () => {
 
   it("retourne null pour un identifiant introuvable", async () => {
     await expect(getUser("id-qui-nexiste-pas")).resolves.toBeNull()
+  })
+
+  it("retourne null pour un utilisateur supprimé (suppression douce)", async () => {
+    const target = await createTestUser("get-user-deleted", "member")
+    const actor = await createTestUser("get-user-deleted-actor", "admin")
+
+    await deleteUser(actor.id, target.id)
+
+    await expect(getUser(target.id)).resolves.toBeNull()
+  })
+})
+
+// Garde-fou anti-course (TOCTOU) du dernier administrateur — voir
+// `lockAndCountAdmins` dans src/lib/auth/users.ts pour le détail du
+// mécanisme (SELECT ... FOR UPDATE). Ces deux tests déclenchent RÉELLEMENT
+// deux transactions Postgres concurrentes (Promise.allSettled, pas
+// séquentiel) contre les deux mêmes administrateurs — sans le verrou, les
+// deux compteraient "2 admins" avant que l'une des deux n'ait terminé, et
+// les DEUX passeraient le garde-fou. Non flaky par construction : `FOR
+// UPDATE` fait bloquer la seconde transaction jusqu'à ce que la première
+// valide, PUIS lui fait relire l'état réel des rangées (sémantique
+// EvalPlanQual de Postgres en READ COMMITTED) — l'issue (une réussite, un
+// échec) est donc déterministe, jamais dépendante d'un minutage précis.
+describe("Protection anti-course du dernier administrateur — intégration Postgres", () => {
+  it("deleteUser : sur 2 derniers admins supprimés en même temps, exactement un échoue", async () => {
+    const adminA = await createTestUser("concurrent-delete-a", "admin")
+    const adminB = await createTestUser("concurrent-delete-b", "admin")
+    const actor = await createTestUser("concurrent-delete-actor", "member")
+
+    await withOnlyAdmins([adminA.id, adminB.id], async () => {
+      const [resultA, resultB] = await Promise.allSettled([
+        deleteUser(actor.id, adminA.id),
+        deleteUser(actor.id, adminB.id),
+      ])
+
+      const outcomes = [resultA, resultB]
+      const succeeded = outcomes.filter((r) => r.status === "fulfilled")
+      const failed = outcomes.filter((r) => r.status === "rejected")
+
+      expect(succeeded).toHaveLength(1)
+      expect(failed).toHaveLength(1)
+      expect(String((failed[0] as PromiseRejectedResult).reason)).toMatch(
+        /dernier administrateur/i,
+      )
+
+      // Restaure l'admin dont la suppression a réussi : withOnlyAdmins ne
+      // restaure que les rôles qu'IL a changés (les "autres" admins réels),
+      // pas les conséquences de fn() elle-même — sans quoi le nettoyage
+      // final (afterEach, hard delete via l'adaptateur interne) resterait
+      // correct, mais l'état intermédiaire (un admin de test supprimé) ne
+      // doit pas fuiter au-delà de ce test.
+      const deletedId = resultA.status === "fulfilled" ? adminA.id : adminB.id
+      await db
+        .update(dbSchema.user)
+        .set({ deletedAt: null })
+        .where(eq(dbSchema.user.id, deletedId))
+    })
+  })
+
+  it("updateUser : sur 2 derniers admins rétrogradés en même temps, exactement un échoue", async () => {
+    const adminA = await createTestUser("concurrent-update-a", "admin")
+    const adminB = await createTestUser("concurrent-update-b", "admin")
+    const actor = await createTestUser("concurrent-update-actor", "member")
+
+    await withOnlyAdmins([adminA.id, adminB.id], async () => {
+      const [resultA, resultB] = await Promise.allSettled([
+        updateUser(actor.id, adminA.id, { role: "member" }),
+        updateUser(actor.id, adminB.id, { role: "member" }),
+      ])
+
+      const outcomes = [resultA, resultB]
+      const succeeded = outcomes.filter((r) => r.status === "fulfilled")
+      const failed = outcomes.filter((r) => r.status === "rejected")
+
+      expect(succeeded).toHaveLength(1)
+      expect(failed).toHaveLength(1)
+      expect(String((failed[0] as PromiseRejectedResult).reason)).toMatch(
+        /dernier administrateur/i,
+      )
+
+      // Restaure l'admin dont la rétrogradation a réussi, pour ne pas fuiter
+      // d'état "member" au-delà de ce test (même raison que ci-dessus).
+      const demotedId = resultA.status === "fulfilled" ? adminA.id : adminB.id
+      await db
+        .update(dbSchema.user)
+        .set({ role: "admin" })
+        .where(eq(dbSchema.user.id, demotedId))
+    })
   })
 })

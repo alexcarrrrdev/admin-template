@@ -97,6 +97,14 @@ export const user = pgTable("user", {
     .default("member")
     .notNull()
     .references(() => role.id, { onDelete: "restrict" }),
+  // Suppression douce (soft delete) : NULL tant que le compte est actif, ou
+  // la date de suppression sinon (voir src/lib/auth/users.ts, `deleteUser`).
+  // La rangée reste en base — ses sessions sont supprimées explicitement au
+  // moment de la suppression (voir le commentaire de `deleteUser`), et son
+  // courriel reste réservé (toujours contraint par `unique()` ci-dessus) :
+  // aucune restauration via l'interface pour l'instant, seulement une
+  // opération manuelle en base (mettre `deleted_at` à NULL).
+  deletedAt: timestamp("deleted_at"),
 });
 
 export const session = pgTable(

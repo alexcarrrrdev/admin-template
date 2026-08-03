@@ -1,3 +1,5 @@
+import { eq } from "drizzle-orm";
+import { APIError } from "better-auth";
 import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
@@ -83,6 +85,53 @@ export const auth = betterAuth({
         required: true,
         defaultValue: "member",
         input: false,
+      },
+    },
+  },
+  // Bloque la création de session pour un utilisateur supprimé (suppression
+  // douce, voir `deletedAt` dans src/db/schema.ts et `deleteUser` dans
+  // src/lib/auth/users.ts) DANS Better Auth lui-même, pas seulement dans nos
+  // Server Actions (src/app/actions/users.ts) : `/api/auth/sign-in/email`
+  // est un point d'entrée HTTP public (voir src/app/api/auth/[...all]/route.ts),
+  // que Better Auth expose indépendamment de nos Server Actions — un appel
+  // direct à cette route contournerait entièrement une vérification qui ne
+  // vivrait que côté application.
+  //
+  // `session.create.before` est le hook vérifié empiriquement (voir
+  // node_modules/better-auth/dist/db/internal-adapter.mjs, fonction
+  // `createSession`, et node_modules/better-auth/dist/db/with-hooks.mjs,
+  // fonction `createWithHooks`) : signInEmail crée la session via
+  // `internalAdapter.createSession`, qui passe TOUJOURS par ce hook avant
+  // d'écrire la rangée `session` — y compris pour un appel direct à
+  // `auth.api.signInEmail` (voir src/lib/auth/auth.integration.test.ts). Lever
+  // une erreur ici empêche donc la session d'exister, quel que soit le
+  // chemin d'entrée.
+  //
+  // On lance la même erreur (« Invalid email or password », statut 401) que
+  // celle que Better Auth lève déjà pour un mauvais mot de passe (voir
+  // node_modules/better-auth/dist/api/routes/sign-in.mjs) : le formulaire de
+  // connexion affiche dans les deux cas le même message générique
+  // « Courriel ou mot de passe invalide. » (voir loginAction dans
+  // src/app/actions/auth.ts, qui attrape toute erreur sans distinction) — un
+  // tiers ne peut donc pas se servir de cette différence pour deviner qu'un
+  // compte a été supprimé (énumération de comptes).
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => {
+          const [target] = await db
+            .select({ deletedAt: schema.user.deletedAt })
+            .from(schema.user)
+            .where(eq(schema.user.id, session.userId))
+            .limit(1);
+
+          if (target?.deletedAt) {
+            throw new APIError("UNAUTHORIZED", {
+              message: "Invalid email or password",
+              code: "INVALID_EMAIL_OR_PASSWORD",
+            });
+          }
+        },
       },
     },
   },

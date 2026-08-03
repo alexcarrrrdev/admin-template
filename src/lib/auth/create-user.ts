@@ -40,6 +40,17 @@ export async function createUserWithPassword(
 
   const context = await auth.$context;
 
+  // Compromis assumé : `findUserByEmail` (adaptateur interne de Better Auth)
+  // ne sait rien de `user.deleted_at` (voir src/db/schema.ts et la
+  // suppression douce dans src/lib/auth/users.ts) — un courriel ayant
+  // appartenu à un utilisateur supprimé reste donc refusé ici comme s'il
+  // était toujours pris. On ne corrige pas ce comportement : le rendre
+  // possible demanderait de contourner l'adaptateur (requête directe sur
+  // `user` en ignorant `deleted_at`), pour un bénéfice mince — restaurer un
+  // compte supprimé est de toute façon une opération manuelle en base pour
+  // l'instant (pas d'UI de restauration), l'administrateur peut aussi bien y
+  // réactiver l'ancien compte (deleted_at = NULL) plutôt que d'en créer un
+  // nouveau avec le même courriel.
   const existing = await context.internalAdapter.findUserByEmail(email);
   if (existing) {
     throw new Error(`Un compte existe déjà avec le courriel « ${email} ».`);

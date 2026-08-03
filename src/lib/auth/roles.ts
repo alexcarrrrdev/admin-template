@@ -135,19 +135,39 @@ export async function getRole(id: string): Promise<RoleDetail | null> {
 /**
  * Résout l'identifiant final d'un rôle en cours de création : celui fourni
  * explicitement (validé), ou dérivé du nom via `slugify`. Lance une erreur
- * française si le résultat ne respecte pas SLUG_PATTERN (ex. nom vide après
- * normalisation, comme "!!!").
+ * française si le résultat ne respecte pas SLUG_PATTERN — mais PAS la même
+ * selon la provenance du slug invalide :
+ *   - un identifiant explicite invalide (usage script/API : le formulaire
+ *     /administration/roles n'expose plus de champ "identifiant", voir
+ *     createRole ci-dessous) garde le message technique, orienté
+ *     "identifiant" ;
+ *   - un identifiant DÉRIVÉ du nom (aucun identifiant fourni) et invalide —
+ *     typiquement un nom sans aucune lettre ni chiffre, ex. "!!!", qui donne
+ *     une chaîne vide après `slugify` (voir src/lib/auth/slug.ts) — ne doit
+ *     JAMAIS mentionner "identifiant" : ce concept n'est pas visible dans le
+ *     formulaire, l'utilisateur n'a que le champ "nom" sous les yeux, c'est
+ *     donc lui que le message doit désigner.
  */
 function resolveNewRoleId(id: string | undefined, name: string): string {
-  const candidate = id?.trim() ? id.trim() : slugify(name);
+  const explicitId = id?.trim();
 
-  if (!SLUG_PATTERN.test(candidate)) {
+  if (explicitId) {
+    if (!SLUG_PATTERN.test(explicitId)) {
+      throw new Error(
+        "Identifiant de rôle invalide : uniquement des lettres minuscules, des chiffres et des tirets, entre 2 et 50 caractères.",
+      );
+    }
+    return explicitId;
+  }
+
+  const derived = slugify(name);
+  if (!SLUG_PATTERN.test(derived)) {
     throw new Error(
-      "Identifiant de rôle invalide : uniquement des lettres minuscules, des chiffres et des tirets, entre 2 et 50 caractères.",
+      "Le nom du rôle doit contenir au moins une lettre ou un chiffre.",
     );
   }
 
-  return candidate;
+  return derived;
 }
 
 export type CreateRoleInput = {

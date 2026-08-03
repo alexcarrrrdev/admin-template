@@ -57,6 +57,17 @@ export type UserRow = {
 type UsersTableProps = {
   users: UserRow[]
   currentUserId: string
+  // Permissions accordées à l'utilisateur courant ("user:create",
+  // "user:update", "user:delete" — voir src/lib/auth/permissions.ts),
+  // résolues côté serveur (page /administration/utilisateurs) et transmises
+  // ici sous forme de booléens déjà calculés : ce composant n'a pas accès à
+  // la base de données pour les résoudre lui-même. Simple confort d'UI —
+  // masquer une action qu'un utilisateur ne peut de toute façon pas
+  // effectuer — la vérification qui fait autorité reste dans la Server
+  // Action correspondante (src/app/actions/users.ts).
+  canCreate: boolean
+  canUpdate: boolean
+  canDelete: boolean
 }
 
 // Tableau de gestion des utilisateurs (/administration/utilisateurs). Pas de
@@ -73,9 +84,19 @@ type UsersTableProps = {
 // qui EN est une et garde donc son AlertDialog : reste ouvert avec une
 // Alert inline en cas d'erreur (garde-fous serveur : dernier administrateur,
 // auto-suppression), ne se ferme que sur succès (toast + rafraîchissement).
-export function UsersTable({ users, currentUserId }: UsersTableProps) {
+export function UsersTable({
+  users,
+  currentUserId,
+  canCreate,
+  canUpdate,
+  canDelete,
+}: UsersTableProps) {
   const router = useRouter()
   const [deletingUser, setDeletingUser] = useState<UserRow | null>(null)
+  // Aucune des deux actions de ligne n'est accordée : la colonne "Actions"
+  // elle-même n'a plus lieu d'exister (voir le commentaire de
+  // `UsersTableProps` ci-dessus).
+  const showActionsColumn = canUpdate || canDelete
 
   return (
     <Card>
@@ -86,13 +107,15 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
             Comptes ayant accès à cette application.
           </CardDescription>
         </div>
-        <Button
-          size="sm"
-          render={<Link href="/administration/utilisateurs/nouveau" />}
-        >
-          <PlusIcon />
-          Créer un utilisateur
-        </Button>
+        {canCreate && (
+          <Button
+            size="sm"
+            render={<Link href="/administration/utilisateurs/nouveau" />}
+          >
+            <PlusIcon />
+            Créer un utilisateur
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <Table>
@@ -102,14 +125,16 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
               <TableHead>Courriel</TableHead>
               <TableHead>Rôle</TableHead>
               <TableHead>Créé le</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              {showActionsColumn && (
+                <TableHead className="text-right">Actions</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {users.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={showActionsColumn ? 5 : 4}
                   className="text-center text-muted-foreground"
                 >
                   Aucun utilisateur.
@@ -133,37 +158,43 @@ export function UsersTable({ users, currentUserId }: UsersTableProps) {
                   <TableCell className="text-muted-foreground">
                     {dateFormatter.format(user.createdAt)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon-sm">
-                            <MoreHorizontalIcon />
-                            <span className="sr-only">
-                              Actions pour {user.name}
-                            </span>
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
+                  {showActionsColumn && (
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
                           render={
-                            <Link
-                              href={`/administration/utilisateurs/${user.id}`}
-                            />
+                            <Button variant="ghost" size="icon-sm">
+                              <MoreHorizontalIcon />
+                              <span className="sr-only">
+                                Actions pour {user.name}
+                              </span>
+                            </Button>
                           }
-                        >
-                          Modifier
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          onClick={() => setDeletingUser(user)}
-                        >
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+                        />
+                        <DropdownMenuContent align="end">
+                          {canUpdate && (
+                            <DropdownMenuItem
+                              render={
+                                <Link
+                                  href={`/administration/utilisateurs/${user.id}`}
+                                />
+                              }
+                            >
+                              Modifier
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => setDeletingUser(user)}
+                            >
+                              Supprimer
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}
@@ -221,8 +252,10 @@ function DeleteUserAlertDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Supprimer {user.name} ?</AlertDialogTitle>
           <AlertDialogDescription>
-            Cette action est irréversible. Le compte associé au courriel{" "}
-            <strong>{user.email}</strong> sera définitivement supprimé.
+            Cette action est irréversible depuis cette interface. L&apos;accès
+            du compte associé au courriel <strong>{user.email}</strong> sera
+            immédiatement révoqué (déconnexion, connexion impossible) et il
+            disparaîtra de cette liste.
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error && (

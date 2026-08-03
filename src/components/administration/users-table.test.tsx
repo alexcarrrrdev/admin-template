@@ -51,8 +51,32 @@ beforeEach(() => {
   mockToastSuccess.mockReset()
 })
 
-function renderTable(currentUserId = "u1") {
-  return render(<UsersTable users={users} currentUserId={currentUserId} />)
+type RenderTableOptions = {
+  currentUserId?: string
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
+}
+
+// Par défaut, les trois permissions sont accordées : la plupart des tests de
+// ce fichier portent sur autre chose que le filtrage par permission (voir
+// `describe("UsersTable — permissions")` ci-dessous pour ce cas précis), pas
+// la peine de le répéter à chaque appel.
+function renderTable({
+  currentUserId = "u1",
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
+}: RenderTableOptions = {}) {
+  return render(
+    <UsersTable
+      users={users}
+      currentUserId={currentUserId}
+      canCreate={canCreate}
+      canUpdate={canUpdate}
+      canDelete={canDelete}
+    />,
+  )
 }
 
 describe("UsersTable — tableau", () => {
@@ -68,7 +92,7 @@ describe("UsersTable — tableau", () => {
   })
 
   it("affiche le marqueur (vous) uniquement sur la ligne de l'utilisateur courant", () => {
-    renderTable("u2")
+    renderTable({ currentUserId: "u2" })
 
     const samRow = screen.getByText("Sam Tremblay").closest("tr")
     const alexRow = screen.getByText("Alex Caron").closest("tr")
@@ -151,5 +175,60 @@ describe("UsersTable — suppression", () => {
       "Vous ne pouvez pas supprimer votre propre compte.",
     )
     expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+})
+
+describe("UsersTable — permissions", () => {
+  it("masque le bouton Créer sans user:create", () => {
+    renderTable({ canCreate: false })
+
+    expect(
+      screen.queryByRole("button", { name: /créer un utilisateur/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("masque Modifier dans le menu sans user:update", async () => {
+    const user = userEvent.setup()
+    renderTable({ canUpdate: false })
+
+    const row = screen.getByText("Sam Tremblay").closest("tr")!
+    await user.click(
+      within(row).getByRole("button", { name: "Actions pour Sam Tremblay" }),
+    )
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Modifier" }),
+    ).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole("menuitem", { name: "Supprimer" }),
+    ).toBeInTheDocument()
+  })
+
+  it("masque Supprimer dans le menu sans user:delete", async () => {
+    const user = userEvent.setup()
+    renderTable({ canDelete: false })
+
+    const row = screen.getByText("Sam Tremblay").closest("tr")!
+    await user.click(
+      within(row).getByRole("button", { name: "Actions pour Sam Tremblay" }),
+    )
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Modifier" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("menuitem", { name: "Supprimer" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("masque toute la colonne Actions (en-tête compris) sans user:update ni user:delete", () => {
+    renderTable({ canUpdate: false, canDelete: false })
+
+    expect(
+      screen.queryByRole("columnheader", { name: "Actions" }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /actions pour/i }),
+    ).not.toBeInTheDocument()
   })
 })

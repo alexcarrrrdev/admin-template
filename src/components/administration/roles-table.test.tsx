@@ -59,9 +59,30 @@ beforeEach(() => {
   mockToastSuccess.mockReset()
 })
 
-function renderTable() {
+type RenderTableOptions = {
+  canCreate?: boolean
+  canUpdate?: boolean
+  canDelete?: boolean
+}
+
+// Par défaut, les trois permissions sont accordées : la plupart des tests de
+// ce fichier portent sur autre chose que le filtrage par permission (voir
+// `describe("RolesTable — permissions")` ci-dessous pour ce cas précis), pas
+// la peine de le répéter à chaque appel.
+function renderTable({
+  canCreate = true,
+  canUpdate = true,
+  canDelete = true,
+}: RenderTableOptions = {}) {
   return render(
-    <RolesTable roles={roles} adminRoleId="admin" memberRoleId="member" />,
+    <RolesTable
+      roles={roles}
+      adminRoleId="admin"
+      memberRoleId="member"
+      canCreate={canCreate}
+      canUpdate={canUpdate}
+      canDelete={canDelete}
+    />,
   )
 }
 
@@ -196,5 +217,84 @@ describe("RolesTable — suppression", () => {
       "Impossible de supprimer ce rôle : 1 utilisateur l'utilise encore.",
     )
     expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+})
+
+describe("RolesTable — permissions", () => {
+  it("masque le bouton Créer sans role:create", () => {
+    renderTable({ canCreate: false })
+
+    expect(
+      screen.queryByRole("button", { name: /créer un rôle/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("masque Modifier dans le menu sans role:update, garde Supprimer", async () => {
+    const user = userEvent.setup()
+    renderTable({ canUpdate: false })
+
+    const comptableRow = screen.getByText("Comptable").closest("tr")!
+    await user.click(
+      within(comptableRow).getByRole("button", {
+        name: /actions pour comptable/i,
+      }),
+    )
+
+    expect(
+      screen.queryByRole("menuitem", { name: "Modifier" }),
+    ).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole("menuitem", { name: "Supprimer" }),
+    ).toBeInTheDocument()
+  })
+
+  it("masque Supprimer dans le menu sans role:delete, garde Modifier", async () => {
+    const user = userEvent.setup()
+    renderTable({ canDelete: false })
+
+    const comptableRow = screen.getByText("Comptable").closest("tr")!
+    await user.click(
+      within(comptableRow).getByRole("button", {
+        name: /actions pour comptable/i,
+      }),
+    )
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Modifier" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole("menuitem", { name: "Supprimer" }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("masque toute la colonne Actions (en-tête compris, y compris le cadenas admin) sans role:update ni role:delete", () => {
+    renderTable({ canUpdate: false, canDelete: false })
+
+    expect(
+      screen.queryByRole("columnheader", { name: "Actions" }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("Rôle protégé")).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /actions pour/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it("masque le menu d'actions du rôle membre sans role:update ni role:delete-sur-membre (permission role:delete seule, système bloque quand même)", async () => {
+    // Avec seulement role:delete accordé (pas role:update), la ligne
+    // "Membre" ne peut ni être modifiée (permission manquante) ni supprimée
+    // (règle système, voir isMember dans RolesTable) : son menu d'actions
+    // doit disparaître entièrement, même si la colonne existe encore pour
+    // les autres lignes (ex. Comptable, supprimable).
+    renderTable({ canUpdate: false, canDelete: true })
+
+    const memberRow = screen.getByText("Membre").closest("tr")!
+    expect(
+      within(memberRow).queryByRole("button", { name: /actions pour/i }),
+    ).not.toBeInTheDocument()
+
+    const comptableRow = screen.getByText("Comptable").closest("tr")!
+    expect(
+      within(comptableRow).getByRole("button", { name: /actions pour/i }),
+    ).toBeInTheDocument()
   })
 })

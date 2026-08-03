@@ -37,7 +37,20 @@ export default async function AdministrationUtilisateursPage() {
     )
   }
 
-  const users = await listUsers()
+  const [users, canCreate, canUpdate, canDelete] = await Promise.all([
+    listUsers(),
+    hasPermission(session.user, "user", "create"),
+    hasPermission(session.user, "user", "update"),
+    hasPermission(session.user, "user", "delete"),
+  ])
 
-  return <UsersTable users={users} currentUserId={session.user.id} />
+  return (
+    <UsersTable
+      users={users}
+      currentUserId={session.user.id}
+      canCreate={canCreate}
+      canUpdate={canUpdate}
+      canDelete={canDelete}
+    />
+  )
 }
