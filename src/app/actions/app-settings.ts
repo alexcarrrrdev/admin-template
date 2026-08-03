@@ -49,7 +49,7 @@ export async function updateAppNameAction(
   }
 
   try {
-    await setAppName(parsed.data.appName)
+    await setAppName(session.user.id, parsed.data.appName)
   } catch {
     return { error: "Une erreur est survenue lors de l'enregistrement." }
   }
@@ -84,7 +84,7 @@ export async function uploadLogoAction(formData: FormData): Promise<ActionResult
   }
 
   try {
-    await setLogo(Buffer.from(bytes), file.type)
+    await setLogo(session.user.id, Buffer.from(bytes), file.type)
   } catch {
     return { error: "Une erreur est survenue lors de l'enregistrement du logo." }
   }
@@ -103,7 +103,7 @@ export async function removeLogoAction(): Promise<ActionResult> {
   }
 
   try {
-    await clearLogo()
+    await clearLogo(session.user.id)
   } catch {
     return { error: "Une erreur est survenue lors du retrait du logo." }
   }

@@ -21,6 +21,7 @@ Plutôt que de repartir de zéro à chaque projet client, ce template regroupe l
 - **Authentification complète** (Better Auth) : connexion, sessions, réinitialisation de mot de passe par courriel — sans inscription publique, les comptes étant créés par un administrateur.
 - **Rôles et permissions dynamiques** : rôles créés depuis l'interface avec une matrice de permissions par ressource ; la navigation et les actions s'adaptent automatiquement aux permissions de chacun.
 - **Gestion des utilisateurs** : création, modification et suppression douce (données conservées, déconnexion immédiate) depuis la section Administration.
+- **Journal d'audit** : historique consultable (`/administration/journal`) des actions administratives — qui a fait quoi, quand, sur quoi.
 - **Profil** : informations du compte, changement de mot de passe (qui déconnecte les autres appareils) et liste des sessions actives avec révocation.
 - **Identité par client** : nom de l'application et logo configurables depuis l'interface, affichés jusque sur la page de connexion — dupliquer le template, c'est surtout changer deux champs.
 - **Thème clair / sombre / système**, sans clignotement au chargement.
@@ -117,6 +118,17 @@ Un administrateur peut téléverser un logo depuis **/administration/general** (
 - **Repli par défaut** : tant qu'aucun logo n'est téléversé (ou après un clic sur « Retirer le logo »), l'icône ShieldCheck s'affiche à sa place — aucune configuration n'est requise pour démarrer.
 
 Le fichier est validé côté serveur (taille, type MIME, signature binaire pour PNG/JPEG/WebP, liste noire de motifs dangereux pour SVG — voir `src/lib/settings/logo-validation.ts`) puis stocké directement en base de données (colonnes `logo`/`logo_mime_type` de `app_settings`, voir `src/db/schema.ts`), sans dépendance à un stockage de fichiers externe. Il est ensuite servi par la route `/logo` (`src/app/logo/route.ts`), publique et mise en cache de façon agressive côté navigateur grâce à un paramètre de version qui change automatiquement à chaque mise à jour.
+
+### Journal d'audit
+
+Un administrateur (permission `audit:read`, accordée automatiquement au rôle `admin`) consulte depuis **/administration/journal** l'historique des actions administratives : qui (acteur), quoi (action, avec un court diff avant/après quand pertinent), sur quoi (cible) et quand — avec filtres (par action, par acteur) et pagination. Voir `src/lib/audit/audit.ts` pour le catalogue complet des actions journalisées et `src/db/schema.ts` (table `audit_log`) pour le détail des colonnes.
+
+- **Journalisé** : création/modification/suppression d'un utilisateur, création/modification/suppression d'un rôle, changement du nom de l'application ou du logo, connexion, changement ou réinitialisation de mot de passe, modification du nom depuis /profil, révocation d'une session ou de toutes les autres.
+- **Volontairement PAS journalisé** :
+  - les **tentatives de connexion échouées** — les journaliser exposerait le journal lui-même à être inondé par un tiers qui essaierait des mots de passe au hasard sur un compte connu (la limitation de débit sur `/sign-in/email` réduit ce risque sans l'éliminer : elle limite par IP, pas par compte visé) ;
+  - les **demandes de réinitialisation de mot de passe** — même risque d'inondation, plus un risque propre au journal : cette action répond volontairement de la même façon qu'un courriel corresponde ou non à un compte existant (anti-énumération de comptes), la journaliser recréerait cette fuite dans le journal lui-même.
+- **Conservation** : illimitée pour l'instant — aucune purge automatique. Si le volume devient un problème, une purge manuelle (`DELETE FROM audit_log WHERE created_at < ...`) reste possible directement en base, la table n'ayant aucune contrainte de clé étrangère entrante.
+- **Écriture seule** : le module (`src/lib/audit/audit.ts`) n'expose aucune fonction de mise à jour ni de suppression — une trace d'audit ne se corrige pas après coup.
 
 ## Tests
 

@@ -65,12 +65,20 @@ describe("AppSidebar", () => {
   })
 
   it("cache le groupe Administration sans aucune des permissions de ses entrées", () => {
-    // Aucune des trois permissions (user:read, role:read, settings:update)
-    // n'est accordée : le groupe entier ne doit pas s'afficher plutôt que
-    // de proposer un lien menant à un « Accès refusé ».
+    // Aucune des quatre permissions (user:read, role:read, settings:update,
+    // audit:read) n'est accordée : le groupe entier ne doit pas s'afficher
+    // plutôt que de proposer un lien menant à un « Accès refusé ».
     renderSidebar([])
 
     expect(screen.queryByText("Administration")).not.toBeInTheDocument()
+  })
+
+  it("affiche Journal quand audit:read est accordée", () => {
+    pathname = "/administration/journal"
+    renderSidebar(["audit:read"])
+
+    expect(screen.getByText("Administration")).toBeInTheDocument()
+    expect(screen.getByText("Journal")).toBeInTheDocument()
   })
 
   it("affiche Utilisateurs quand user:read est accordée", () => {

@@ -36,7 +36,7 @@ export async function createUserAction(values: CreateUserInput): Promise<ActionR
       return { error: parsed.error.issues[0]?.message ?? "Utilisateur invalide." }
     }
 
-    await createUserWithPassword(parsed.data)
+    await createUserWithPassword({ ...parsed.data, actorId: session.user.id })
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Une erreur est survenue." }
   }

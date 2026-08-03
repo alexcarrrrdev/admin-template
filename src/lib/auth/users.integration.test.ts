@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm"
+import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 // Tests d'intégration de la gestion des utilisateurs (src/lib/auth/users.ts
@@ -75,6 +75,27 @@ beforeAll(async () => {
 
 afterEach(async () => {
   if (!auth) return
+
+  // Entrées du journal d'audit produites par les tests qui viennent de
+  // s'exécuter (user.create/update/delete, voir src/lib/auth/users.ts et
+  // src/lib/auth/create-user.ts — et potentiellement auth.login, écrite par
+  // le hook databaseHooks.session.create.after de src/lib/auth/index.ts pour
+  // les quelques tests ci-dessous qui appellent signInEmail) : toutes
+  // référencent un identifiant de createdUserIds, soit comme acteur, soit
+  // comme cible — capturé AVANT la boucle de suppression ci-dessous, qui vide
+  // le tableau au fur et à mesure.
+  if (createdUserIds.length > 0) {
+    const idsSnapshot = [...createdUserIds]
+    await db
+      .delete(dbSchema.auditLog)
+      .where(
+        or(
+          inArray(dbSchema.auditLog.actorId, idsSnapshot),
+          inArray(dbSchema.auditLog.targetId, idsSnapshot),
+        ),
+      )
+  }
+
   const context = await auth.$context
   while (createdUserIds.length > 0) {
     const id = createdUserIds.pop()
@@ -172,6 +193,7 @@ describe("createUserWithPassword — intégration Postgres", () => {
       email,
       password: "MotDePasse123!",
       role: "member",
+      actorId: null,
     })
     createdUserIds.push(created.id)
 
@@ -208,6 +230,7 @@ describe("createUserWithPassword — intégration Postgres", () => {
       email,
       password: "MotDePasse123!",
       role: "member",
+      actorId: null,
     })
     createdUserIds.push(first.id)
 
@@ -217,6 +240,7 @@ describe("createUserWithPassword — intégration Postgres", () => {
         email,
         password: "AutreMotDePasse123!",
         role: "member",
+        actorId: null,
       }),
     ).rejects.toThrow(/existe déjà/i)
   })
@@ -230,6 +254,7 @@ describe("createUserWithPassword — intégration Postgres", () => {
         email,
         password: "MotDePasse123!",
         role: "role-qui-nexiste-pas",
+        actorId: null,
       }),
     ).rejects.toThrow(/introuvable/i)
   })

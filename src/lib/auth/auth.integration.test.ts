@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { sql } from "drizzle-orm"
+import { inArray, or, sql } from "drizzle-orm"
 import { convertSetCookieToCookie } from "better-auth/test"
 import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
@@ -19,10 +19,12 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest"
 
 type AuthModule = typeof import("@/lib/auth")
 type DbModule = typeof import("@/db")
+type SchemaModule = typeof import("@/db/schema")
 type UsersModule = typeof import("@/lib/auth/users")
 
 let auth: AuthModule["auth"]
 let db: DbModule["db"]
+let dbSchema: SchemaModule
 let deleteUser: UsersModule["deleteUser"]
 
 // Comptes créés par les tests de ce fichier, à supprimer après coup. Chaque
@@ -45,13 +47,15 @@ beforeAll(async () => {
     // scripts/create-admin.ts.
   }
 
-  const [authModule, dbModule, usersModule] = await Promise.all([
+  const [authModule, dbModule, schemaModule, usersModule] = await Promise.all([
     import("@/lib/auth"),
     import("@/db"),
+    import("@/db/schema"),
     import("@/lib/auth/users"),
   ])
   auth = authModule.auth
   db = dbModule.db
+  dbSchema = schemaModule
   deleteUser = usersModule.deleteUser
 
   try {
@@ -69,6 +73,26 @@ beforeAll(async () => {
 
 afterEach(async () => {
   if (!auth) return
+
+  // Entrées du journal d'audit produites par les tests qui viennent de
+  // s'exécuter — au minimum auth.login (hook databaseHooks.session.create.
+  // after, src/lib/auth/index.ts) à chaque signInEmail réussi ci-dessous, et
+  // potentiellement user.delete (src/lib/auth/users.ts) pour le test de
+  // connexion refusée après suppression. Toutes référencent un identifiant
+  // de createdUserIds, capturé AVANT la boucle de suppression qui vide le
+  // tableau — même mécanisme que src/lib/auth/users.integration.test.ts.
+  if (createdUserIds.length > 0) {
+    const idsSnapshot = [...createdUserIds]
+    await db
+      .delete(dbSchema.auditLog)
+      .where(
+        or(
+          inArray(dbSchema.auditLog.actorId, idsSnapshot),
+          inArray(dbSchema.auditLog.targetId, idsSnapshot),
+        ),
+      )
+  }
+
   const context = await auth.$context
   while (createdUserIds.length > 0) {
     const id = createdUserIds.pop()

@@ -5,6 +5,7 @@ import {
   customType,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -200,6 +201,68 @@ export const appSettings = pgTable("app_settings", {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
 });
+
+// Journal d'audit : trace des actions administratives (création/modification/
+// suppression d'utilisateurs et de rôles, changements des paramètres de
+// l'application, authentification...), voir src/lib/audit/audit.ts — le SEUL
+// module autorisé à écrire dans cette table. WRITE-ONLY par conception :
+// aucune fonction de mise à jour ni de suppression n'est exposée par ce
+// module, et rien ici n'empêcherait techniquement un UPDATE/DELETE en base,
+// mais l'application elle-même ne le fait jamais — une trace d'audit qui
+// pourrait être corrigée après coup perdrait sa valeur de preuve.
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Volontairement SANS clé étrangère vers `user.id` : le journal doit
+    // survivre à la rangée `user` qui l'a produit (suppression douce
+    // aujourd'hui, mais aussi toute évolution future de cette table), et une
+    // contrainte de clé étrangère créerait un couplage dans le mauvais sens
+    // — une trace passée ne doit jamais pouvoir bloquer ou compliquer une
+    // opération sur `user`. `actorLabel` ci-dessous (cliché "Nom (courriel)"
+    // pris au moment de l'action) est donc la source de vérité AFFICHÉE,
+    // jamais une jointure sur `user` par `actorId` : ce dernier ne sert qu'à
+    // filtrer/regrouper (voir listAuditEntries dans src/lib/audit/audit.ts),
+    // et peut légitimement pointer vers une rangée `user` désormais
+    // supprimée (deleted_at non NULL) ou, en théorie, totalement absente.
+    actorId: text("actor_id"),
+    // Cliché "Nom (courriel)" de l'auteur au moment de l'action, ou
+    // "Système" pour une action déclenchée sans utilisateur connecté (ex.
+    // scripts/create-admin.ts). Toujours renseigné (jamais NULL), y compris
+    // quand `actorId` devient orphelin par la suite.
+    actorLabel: text("actor_label").notNull(),
+    // Clé pointée de l'action, ex. "user.create" — voir le catalogue
+    // AUDIT_ACTIONS dans src/lib/audit/audit.ts pour la liste complète et
+    // leurs libellés français.
+    action: text("action").notNull(),
+    // Nature de la cible de l'action (ex. "user", "role", "settings"), NULL
+    // pour une action sans cible distincte de l'acteur (ex. "auth.login").
+    targetType: text("target_type"),
+    targetId: text("target_id"),
+    // Cliché humain de la cible au moment de l'action (ex. "Marie Tremblay
+    // (marie@exemple.com)", "Rôle Comptable"), même raison que `actorLabel`
+    // ci-dessus. Chaîne vide (jamais NULL) quand `targetType`/`targetId` sont
+    // eux-mêmes absents.
+    targetLabel: text("target_label").notNull().default(""),
+    // Différence avant/après minimale, propre à chaque action — voir chaque
+    // site d'appel de recordAudit (src/lib/audit/audit.ts) pour sa forme
+    // exacte, et src/lib/audit/format-details.ts pour son rendu dans
+    // l'interface. Clés techniques (anglais) plutôt que françaises : ce sont
+    // des données, pas de l'UI. JAMAIS de mot de passe, de hachage ou de
+    // jeton, sous quelque forme que ce soit. NULL si l'action n'a pas de
+    // détail pertinent au-delà de son enregistrement lui-même.
+    details: jsonb("details"),
+  },
+  (table) => [
+    // La liste (/administration/journal) est toujours triée du plus récent
+    // au plus ancien (voir listAuditEntries) : cet index sert directement ce
+    // tri, en plus de la pagination qui l'accompagne.
+    index("audit_log_created_at_idx").on(table.createdAt),
+    // Sert le filtre "Acteur" de la même page.
+    index("audit_log_actor_id_idx").on(table.actorId),
+  ],
+);
 
 export const userRelations = relations(user, ({ one, many }) => ({
   sessions: many(session),
