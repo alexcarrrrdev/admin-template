@@ -7,6 +7,7 @@ import {
 } from "@/lib/settings/app-settings"
 import { AppNameForm } from "@/components/administration/app-name-form"
 import { LogoUploadForm } from "@/components/administration/logo-upload-form"
+import { PrimaryColorForm } from "@/components/administration/primary-color-form"
 import {
   Card,
   CardContent,
@@ -40,7 +41,8 @@ export default async function AdministrationGeneralPage() {
     )
   }
 
-  const { appName, hasLogo, logoVersion } = await getAppSettingsSummary()
+  const { appName, hasLogo, logoVersion, primaryColor } =
+    await getAppSettingsSummary()
 
   return (
     <div className="flex flex-col gap-4">
@@ -53,6 +55,21 @@ export default async function AdministrationGeneralPage() {
         </CardHeader>
         <CardContent>
           <AppNameForm defaultAppName={appName} />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Couleur principale</CardTitle>
+          <CardDescription>
+            Couleur utilisée pour les boutons, l&apos;anneau de focus et
+            l&apos;élément actif de la barre latérale — sur l&apos;ensemble
+            de l&apos;application, y compris la page de connexion. Le
+            contraste du texte et une variante adaptée au mode sombre sont
+            calculés automatiquement.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PrimaryColorForm defaultPrimaryColor={primaryColor} />
         </CardContent>
       </Card>
       <Card>

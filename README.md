@@ -23,7 +23,7 @@ Plutôt que de repartir de zéro à chaque projet client, ce template regroupe l
 - **Gestion des utilisateurs** : création, modification et suppression douce (données conservées, déconnexion immédiate) depuis la section Administration.
 - **Journal d'audit** : historique consultable (`/administration/journal`) des actions administratives — qui a fait quoi, quand, sur quoi.
 - **Profil** : informations du compte, changement de mot de passe (qui déconnecte les autres appareils) et liste des sessions actives avec révocation.
-- **Identité par client** : nom de l'application et logo configurables depuis l'interface, affichés jusque sur la page de connexion — dupliquer le template, c'est surtout changer deux champs.
+- **Identité par client** : nom de l'application, logo et couleur principale configurables depuis l'interface, affichés jusque sur la page de connexion — dupliquer le template, c'est surtout changer ces champs. Pour la couleur, le contraste du texte et une variante adaptée au mode sombre sont calculés automatiquement à partir de la seule teinte choisie, avec une réinitialisation en un clic vers le thème par défaut.
 - **Thème clair / sombre / système**, sans clignotement au chargement.
 - **Sécurité par défaut** : en-têtes HTTP (CSP, HSTS…), limitation de débit persistante sur la connexion, validation des variables d'environnement au démarrage, garde-fous anti-verrouillage (dernier administrateur protégé, rôle admin immuable).
 - **Tests** : unitaires, composants et intégration contre une vraie base Postgres.
@@ -123,7 +123,7 @@ Le fichier est validé côté serveur (taille, type MIME, signature binaire pour
 
 Un administrateur (permission `audit:read`, accordée automatiquement au rôle `admin`) consulte depuis **/administration/journal** l'historique des actions administratives : qui (acteur), quoi (action, avec un court diff avant/après quand pertinent), sur quoi (cible) et quand — avec filtres (par action, par acteur) et pagination. Voir `src/lib/audit/audit.ts` pour le catalogue complet des actions journalisées et `src/db/schema.ts` (table `audit_log`) pour le détail des colonnes.
 
-- **Journalisé** : création/modification/suppression d'un utilisateur, création/modification/suppression d'un rôle, changement du nom de l'application ou du logo, connexion, changement ou réinitialisation de mot de passe, modification du nom depuis /profil, révocation d'une session ou de toutes les autres.
+- **Journalisé** : création/modification/suppression d'un utilisateur, création/modification/suppression d'un rôle, changement du nom de l'application, du logo ou de la couleur principale, connexion, changement ou réinitialisation de mot de passe, modification du nom depuis /profil, révocation d'une session ou de toutes les autres.
 - **Volontairement PAS journalisé** :
   - les **tentatives de connexion échouées** — les journaliser exposerait le journal lui-même à être inondé par un tiers qui essaierait des mots de passe au hasard sur un compte connu (la limitation de débit sur `/sign-in/email` réduit ce risque sans l'éliminer : elle limite par IP, pas par compte visé) ;
   - les **demandes de réinitialisation de mot de passe** — même risque d'inondation, plus un risque propre au journal : cette action répond volontairement de la même façon qu'un courriel corresponde ou non à un compte existant (anti-énumération de comptes), la journaliser recréerait cette fuite dans le journal lui-même.

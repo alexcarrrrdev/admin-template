@@ -4,6 +4,7 @@ import {
   DEFAULT_APP_NAME,
   resolveAppName,
   resolveHasLogo,
+  resolvePrimaryColor,
 } from "@/lib/settings/app-settings"
 
 // Ces tests couvrent la logique pure (repli par défaut), sans toucher à la
@@ -36,6 +37,21 @@ describe("resolveHasLogo", () => {
 
   it("retourne vrai quand un type MIME de logo est enregistré", () => {
     expect(resolveHasLogo({ logoMimeType: "image/png" })).toBe(true)
+  })
+})
+
+describe("resolvePrimaryColor", () => {
+  it("retourne null quand aucune rangée n'existe", () => {
+    expect(resolvePrimaryColor(undefined)).toBeNull()
+    expect(resolvePrimaryColor(null)).toBeNull()
+  })
+
+  it("retourne null quand la rangée existe mais n'a pas de couleur personnalisée", () => {
+    expect(resolvePrimaryColor({ primaryColor: null })).toBeNull()
+  })
+
+  it("retourne la couleur enregistrée quand elle existe", () => {
+    expect(resolvePrimaryColor({ primaryColor: "#2563eb" })).toBe("#2563eb")
   })
 })
 

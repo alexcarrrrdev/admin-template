@@ -37,6 +37,20 @@ export function resolveHasLogo(
   return row?.logoMimeType != null
 }
 
+/**
+ * Résout la couleur principale personnalisée à partir de la rangée lue en
+ * base (ou son absence). `null` tant qu'aucun administrateur n'en a
+ * enregistré une (voir setPrimaryColor ci-dessous) — le thème par défaut de
+ * globals.css s'applique alors sans aucune modification (voir
+ * buildThemeCssVariables dans src/lib/settings/color.ts, et son injection
+ * dans src/app/layout.tsx, qui ne rend rien du tout dans ce cas).
+ */
+export function resolvePrimaryColor(
+  row: { primaryColor: string | null } | undefined | null,
+): string | null {
+  return row?.primaryColor ?? null
+}
+
 export type AppSettingsSummary = {
   appName: string
   hasLogo: boolean
@@ -45,6 +59,9 @@ export type AppSettingsSummary = {
   // logo est affiché : voir src/components/brand-mark.tsx. 0 tant qu'aucune
   // rangée n'existe encore.
   logoVersion: number
+  // Couleur principale personnalisée (`#RRGGBB`), ou `null` si le thème par
+  // défaut s'applique — voir resolvePrimaryColor ci-dessus.
+  primaryColor: string | null
 }
 
 /**
@@ -66,6 +83,14 @@ export type AppSettingsSummary = {
  * qu'à l'endroit qui en a réellement besoin, la route /logo (voir getLogo
  * ci-dessous), via sa propre requête mémorisée.
  *
+ * Sélectionne aussi `primaryColor` (texte, léger comme `logoMimeType`) :
+ * consommé par le layout racine (src/app/layout.tsx) pour l'injection
+ * côté serveur du <style> de thème (voir buildThemeCssVariables dans
+ * src/lib/settings/color.ts) — le même argument qu'au-dessus s'applique,
+ * cette mémorisation garantit qu'une seule requête est faite même si
+ * generateMetadata ET le layout lisent tous deux ces réglages pour un même
+ * rendu.
+ *
  * La mémorisation ne vaut que pour la durée d'une requête HTTP : une
  * écriture suivie d'un rafraîchissement (nouvelle requête) renvoie bien la
  * valeur à jour.
@@ -77,6 +102,7 @@ export const getAppSettingsSummary = cache(
         appName: appSettings.appName,
         logoMimeType: appSettings.logoMimeType,
         updatedAt: appSettings.updatedAt,
+        primaryColor: appSettings.primaryColor,
       })
       .from(appSettings)
       .where(eq(appSettings.id, APP_SETTINGS_ID))
@@ -86,6 +112,7 @@ export const getAppSettingsSummary = cache(
       appName: resolveAppName(row),
       hasLogo: resolveHasLogo(row),
       logoVersion: row?.updatedAt.getTime() ?? 0,
+      primaryColor: resolvePrimaryColor(row),
     }
   },
 )
@@ -241,6 +268,75 @@ export async function clearLogo(actorId: string): Promise<void> {
       targetType: "settings",
       targetId: APP_SETTINGS_ID,
       targetLabel: "Logo de l'application",
+    })
+  })
+}
+
+/**
+ * Enregistre la couleur principale personnalisée de l'application (voir
+ * src/lib/settings/color.ts pour sa validation — `hex` est supposé déjà
+ * validé par l'appelant, ex. via son schéma Zod dans
+ * src/lib/settings/schemas.ts — et pour les calculs qui en dérivent).
+ *
+ * Même structure que `setAppName` ci-dessus : crée la rangée si elle
+ * n'existe pas encore (avec le nom d'application par défaut, sans jamais y
+ * toucher si la rangée existe déjà — même raison que `setLogo`), lecture de
+ * l'ancienne valeur + écriture + entrée d'audit dans la MÊME transaction.
+ */
+export async function setPrimaryColor(actorId: string, hex: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ primaryColor: appSettings.primaryColor })
+      .from(appSettings)
+      .where(eq(appSettings.id, APP_SETTINGS_ID))
+      .limit(1)
+
+    await tx
+      .insert(appSettings)
+      .values({ id: APP_SETTINGS_ID, appName: DEFAULT_APP_NAME, primaryColor: hex })
+      .onConflictDoUpdate({
+        target: appSettings.id,
+        set: { primaryColor: hex, updatedAt: new Date() },
+      })
+
+    const actorLabel = await resolveActorLabel(tx, actorId)
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "settings.primary_color.update",
+      targetType: "settings",
+      targetId: APP_SETTINGS_ID,
+      targetLabel: "Couleur principale de l'application",
+      details: {
+        primaryColor: { before: resolvePrimaryColor(before), after: hex },
+      },
+    })
+  })
+}
+
+/**
+ * Retire la couleur principale personnalisée : l'application retombe sur le
+ * thème par défaut de globals.css. Même structure que `clearLogo`
+ * ci-dessus — ne fait rien si aucune rangée n'existe encore (rien à
+ * effacer), mais écrit tout de même une entrée d'audit dans ce cas, pour la
+ * même raison (l'action a bien été demandée par un administrateur, même
+ * sans effet).
+ */
+export async function clearPrimaryColor(actorId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(appSettings)
+      .set({ primaryColor: null, updatedAt: new Date() })
+      .where(eq(appSettings.id, APP_SETTINGS_ID))
+
+    const actorLabel = await resolveActorLabel(tx, actorId)
+    await recordAudit(tx, {
+      actorId,
+      actorLabel,
+      action: "settings.primary_color.delete",
+      targetType: "settings",
+      targetId: APP_SETTINGS_ID,
+      targetLabel: "Couleur principale de l'application",
     })
   })
 }

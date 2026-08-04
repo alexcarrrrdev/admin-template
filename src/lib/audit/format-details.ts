@@ -105,6 +105,12 @@ export function formatAuditDetails(action: string, details: unknown): string[] {
       break
     }
 
+    case "settings.primary_color.update": {
+      const primaryColor = formatDiff("couleur principale", details.primaryColor)
+      if (primaryColor) lines.push(primaryColor)
+      break
+    }
+
     case "auth.password.change": {
       if (details.revokedOtherSessions === true) {
         lines.push("autres sessions révoquées")
