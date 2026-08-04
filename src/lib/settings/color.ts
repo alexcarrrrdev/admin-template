@@ -209,6 +209,69 @@ function darkVariantHsl(hex: string): Hsl {
   return { h: hsl.h, s: hsl.s, l: Math.max(hsl.l, DARK_MODE_MIN_LIGHTNESS) }
 }
 
+// ---------------------------------------------------------------------------
+// Teinte pastel de l'élément actif de la barre latérale
+// ---------------------------------------------------------------------------
+// `--sidebar-accent` colore le fond de l'élément de navigation actif ET le
+// survol des autres éléments (voir `data-active:bg-sidebar-accent` et
+// `hover:bg-sidebar-accent` dans src/components/ui/sidebar.tsx). Lui donner
+// la couleur de marque PLEINE produirait un bloc saturé très lourd — le
+// patron classique est un fond en TEINTE PASTEL de la couleur (même teinte,
+// luminosité très haute en clair / très basse en sombre), avec le texte dans
+// une déclinaison foncée (clair) ou claire (sombre) de la même couleur.
+const SIDEBAR_TINT_LIGHTNESS_LIGHT = 92
+const SIDEBAR_TINT_TEXT_MAX_LIGHTNESS_LIGHT = 35
+const SIDEBAR_TINT_LIGHTNESS_DARK = 26
+const SIDEBAR_TINT_TEXT_MIN_LIGHTNESS_DARK = 85
+
+// Ratio de contraste WCAG minimal (texte normal, niveau AA) entre le fond
+// pastel et son texte coloré : si la paire calculée descend en dessous, on
+// retombe sur le quasi-noir/quasi-blanc neutres plutôt que de sacrifier la
+// lisibilité à l'esthétique.
+const MIN_TINT_TEXT_CONTRAST = 4.5
+
+/** Ratio de contraste WCAG entre deux luminances relatives (ordre libre). */
+export function contrastRatio(luminanceA: number, luminanceB: number): number {
+  const [darker, lighter] = [luminanceA, luminanceB].sort((a, b) => a - b)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
+/**
+ * Calcule la paire fond pastel / texte coloré de l'élément actif de la barre
+ * latérale, pour un mode donné. Si le texte coloré ne contraste pas assez
+ * avec son fond pastel (MIN_TINT_TEXT_CONTRAST), il est remplacé par le
+ * neutre lisible correspondant (FOREGROUND_DARK en clair, FOREGROUND_LIGHT
+ * en sombre).
+ */
+function sidebarTintPair(
+  hex: string,
+  mode: "light" | "dark",
+): { accent: string; accentForeground: string } {
+  const { h, s, l } = rgbToHsl(hexToRgb(hex))
+
+  const tint: Hsl =
+    mode === "light"
+      ? { h, s, l: SIDEBAR_TINT_LIGHTNESS_LIGHT }
+      : { h, s, l: SIDEBAR_TINT_LIGHTNESS_DARK }
+  const text: Hsl =
+    mode === "light"
+      ? { h, s, l: Math.min(l, SIDEBAR_TINT_TEXT_MAX_LIGHTNESS_LIGHT) }
+      : { h, s, l: Math.max(l, SIDEBAR_TINT_TEXT_MIN_LIGHTNESS_DARK) }
+
+  const ratio = contrastRatio(
+    relativeLuminance(hslToRgb(tint)),
+    relativeLuminance(hslToRgb(text)),
+  )
+  const accentForeground =
+    ratio >= MIN_TINT_TEXT_CONTRAST
+      ? formatHsl(text)
+      : mode === "light"
+        ? FOREGROUND_DARK
+        : FOREGROUND_LIGHT
+
+  return { accent: formatHsl(tint), accentForeground }
+}
+
 /**
  * Calcule la variante d'une couleur adaptée au mode sombre : même teinte et
  * saturation que `hex`, mais luminosité relevée à DARK_MODE_MIN_LIGHTNESS au
@@ -272,7 +335,12 @@ export type ThemeCssVariables = {
  *     avec le nommage shadcn/ui standard et pour ne rien casser si un futur
  *     composant venait à l'utiliser. C'est `--sidebar-accent` qu'il faut
  *     surcharger pour que « l'élément actif de la barre latérale suit la
- *     couleur choisie » soit réellement vrai à l'écran.
+ *     couleur choisie » soit réellement vrai à l'écran. Contrairement aux
+ *     autres variables, cette paire ne reçoit PAS la couleur pleine mais sa
+ *     TEINTE PASTEL (fond très clair en mode clair / très sombre en mode
+ *     sombre, texte dans la couleur elle-même) — voir sidebarTintPair : la
+ *     couleur pleine sur l'élément actif ET le survol produirait des blocs
+ *     saturés visuellement très lourds.
  *
  * Dans le thème PAR DÉFAUT (globals.css), `--ring` et `--sidebar-ring` sont
  * déjà la MÊME valeur littérale dans les deux modes — cette fonction
@@ -291,6 +359,10 @@ export function buildThemeCssVariables(hex: string): ThemeCssVariables {
   const darkHsl = darkVariantHsl(hex)
   const darkColor = formatHsl(darkHsl)
   const foregroundDark = readableForegroundForHsl(darkHsl)
+  // L'élément actif (et le survol) de la barre latérale : teinte pastel de
+  // la couleur plutôt que la couleur pleine — voir sidebarTintPair.
+  const tintLight = sidebarTintPair(hex, "light")
+  const tintDark = sidebarTintPair(hex, "dark")
 
   return {
     light: {
@@ -300,8 +372,8 @@ export function buildThemeCssVariables(hex: string): ThemeCssVariables {
       "--sidebar-primary": hex,
       "--sidebar-primary-foreground": foregroundLight,
       "--sidebar-ring": hex,
-      "--sidebar-accent": hex,
-      "--sidebar-accent-foreground": foregroundLight,
+      "--sidebar-accent": tintLight.accent,
+      "--sidebar-accent-foreground": tintLight.accentForeground,
     },
     dark: {
       "--primary": darkColor,
@@ -310,8 +382,8 @@ export function buildThemeCssVariables(hex: string): ThemeCssVariables {
       "--sidebar-primary": darkColor,
       "--sidebar-primary-foreground": foregroundDark,
       "--sidebar-ring": darkColor,
-      "--sidebar-accent": darkColor,
-      "--sidebar-accent-foreground": foregroundDark,
+      "--sidebar-accent": tintDark.accent,
+      "--sidebar-accent-foreground": tintDark.accentForeground,
     },
   }
 }
