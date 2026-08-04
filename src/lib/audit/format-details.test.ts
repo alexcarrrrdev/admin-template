@@ -87,6 +87,26 @@ describe("formatAuditDetails", () => {
     ).toEqual(["nom de l'application : « Admin Template » → « Ma Compagnie »"])
   })
 
+  it("settings.primary_color.update : couleur principale modifiée", () => {
+    expect(
+      formatAuditDetails("settings.primary_color.update", {
+        primaryColor: { before: null, after: "#2563eb" },
+      }),
+    ).toEqual(["couleur principale : « null » → « #2563eb »"])
+  })
+
+  it("settings.primary_color.update : couleur principale remplacée", () => {
+    expect(
+      formatAuditDetails("settings.primary_color.update", {
+        primaryColor: { before: "#2563eb", after: "#dc2626" },
+      }),
+    ).toEqual(["couleur principale : « #2563eb » → « #dc2626 »"])
+  })
+
+  it("settings.primary_color.delete : aucun détail rendu (comme settings.logo.delete)", () => {
+    expect(formatAuditDetails("settings.primary_color.delete", { anything: true })).toEqual([])
+  })
+
   it("settings.logo.update : type MIME et taille", () => {
     expect(
       formatAuditDetails("settings.logo.update", { mimeType: "image/png", size: 2048 }),

@@ -25,6 +25,9 @@ let getLogo: AppSettingsModule["getLogo"]
 let setLogo: AppSettingsModule["setLogo"]
 let clearLogo: AppSettingsModule["clearLogo"]
 let hasLogo: AppSettingsModule["hasLogo"]
+let setPrimaryColor: AppSettingsModule["setPrimaryColor"]
+let clearPrimaryColor: AppSettingsModule["clearPrimaryColor"]
+let getAppSettingsSummary: AppSettingsModule["getAppSettingsSummary"]
 let canManageAppSettings: AppSettingsModule["canManageAppSettings"]
 let DEFAULT_APP_NAME: string
 let APP_SETTINGS_ID: string
@@ -34,6 +37,7 @@ type AppSettingsRow = {
   appName: string
   logo: Buffer | null
   logoMimeType: string | null
+  primaryColor: string | null
   updatedAt: Date
 }
 
@@ -67,6 +71,9 @@ beforeAll(async () => {
   setLogo = appSettingsModule.setLogo
   clearLogo = appSettingsModule.clearLogo
   hasLogo = appSettingsModule.hasLogo
+  setPrimaryColor = appSettingsModule.setPrimaryColor
+  clearPrimaryColor = appSettingsModule.clearPrimaryColor
+  getAppSettingsSummary = appSettingsModule.getAppSettingsSummary
   canManageAppSettings = appSettingsModule.canManageAppSettings
   DEFAULT_APP_NAME = appSettingsModule.DEFAULT_APP_NAME
   APP_SETTINGS_ID = appSettingsModule.APP_SETTINGS_ID
@@ -110,6 +117,7 @@ afterEach(async () => {
           appName: originalRow.appName,
           logo: originalRow.logo,
           logoMimeType: originalRow.logoMimeType,
+          primaryColor: originalRow.primaryColor,
           updatedAt: originalRow.updatedAt,
         },
       })
@@ -196,6 +204,85 @@ describe("setLogo/getLogo/clearLogo — intégration Postgres", () => {
 
     expect(await getLogo()).toBeNull()
     expect(await hasLogo()).toBe(false)
+  })
+})
+
+describe("setPrimaryColor/clearPrimaryColor — intégration Postgres", () => {
+  it("retourne null quand aucune couleur n'est enregistrée", async () => {
+    await clearPrimaryColor(TEST_ACTOR_ID)
+
+    const { primaryColor } = await getAppSettingsSummary()
+    expect(primaryColor).toBeNull()
+  })
+
+  it("enregistre une couleur puis la relit", async () => {
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+
+    const { primaryColor } = await getAppSettingsSummary()
+    expect(primaryColor).toBe("#2563eb")
+  })
+
+  it("met à jour la rangée existante plutôt que d'en créer une nouvelle", async () => {
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+    await setPrimaryColor(TEST_ACTOR_ID, "#dc2626")
+
+    const rows = await db
+      .select()
+      .from(appSettings)
+      .where(eq(appSettings.id, APP_SETTINGS_ID))
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.primaryColor).toBe("#dc2626")
+  })
+
+  it("ne touche pas au nom de l'application déjà enregistré", async () => {
+    await setAppName(TEST_ACTOR_ID, "Nom conservé (couleur)")
+
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+
+    expect(await getAppName()).toBe("Nom conservé (couleur)")
+  })
+
+  it("retire la couleur enregistrée", async () => {
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+
+    await clearPrimaryColor(TEST_ACTOR_ID)
+
+    const { primaryColor } = await getAppSettingsSummary()
+    expect(primaryColor).toBeNull()
+  })
+
+  it("écrit une entrée d'audit settings.primary_color.update avec le diff before/after", async () => {
+    await clearPrimaryColor(TEST_ACTOR_ID)
+
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+
+    const [entry] = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.actorId, TEST_ACTOR_ID))
+      .orderBy(sql`created_at desc`)
+      .limit(1)
+
+    expect(entry?.action).toBe("settings.primary_color.update")
+    expect(entry?.details).toMatchObject({
+      primaryColor: { before: null, after: "#2563eb" },
+    })
+  })
+
+  it("écrit une entrée d'audit settings.primary_color.delete", async () => {
+    await setPrimaryColor(TEST_ACTOR_ID, "#2563eb")
+
+    await clearPrimaryColor(TEST_ACTOR_ID)
+
+    const [entry] = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.actorId, TEST_ACTOR_ID))
+      .orderBy(sql`created_at desc`)
+      .limit(1)
+
+    expect(entry?.action).toBe("settings.primary_color.delete")
   })
 })
 

@@ -196,6 +196,14 @@ export const appSettings = pgTable("app_settings", {
   // src/components/brand-mark.tsx).
   logo: bytea("logo"),
   logoMimeType: text("logo_mime_type"),
+  // Couleur principale personnalisée (facultative), en hexadécimal
+  // `#RRGGBB` — voir src/lib/settings/color.ts pour sa validation
+  // (isValidHexColor) et les calculs qui en dérivent (contraste du texte,
+  // variante adaptée au mode sombre). NULL tant qu'aucun administrateur n'en
+  // a choisi une : le thème par défaut de globals.css s'applique alors sans
+  // aucune modification (voir buildThemeCssVariables, injecté dans
+  // src/app/layout.tsx uniquement quand cette colonne est renseignée).
+  primaryColor: text("primary_color"),
   updatedAt: timestamp("updated_at")
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())

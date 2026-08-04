@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { updateAppNameSchema } from "@/lib/settings/schemas"
+import { updateAppNameSchema, updatePrimaryColorSchema } from "@/lib/settings/schemas"
 
 describe("updateAppNameSchema", () => {
   it("accepte un nom d'application non vide", () => {
@@ -39,5 +39,37 @@ describe("updateAppNameSchema", () => {
       appName: "a".repeat(100),
     })
     expect(result.success).toBe(true)
+  })
+})
+
+describe("updatePrimaryColorSchema", () => {
+  it("accepte un #RRGGBB valide", () => {
+    expect(
+      updatePrimaryColorSchema.safeParse({ primaryColor: "#2563eb" }).success,
+    ).toBe(true)
+  })
+
+  it("accepte un #RRGGBB en majuscules", () => {
+    expect(
+      updatePrimaryColorSchema.safeParse({ primaryColor: "#2563EB" }).success,
+    ).toBe(true)
+  })
+
+  it("rejette une forme courte (#RGB)", () => {
+    expect(
+      updatePrimaryColorSchema.safeParse({ primaryColor: "#fff" }).success,
+    ).toBe(false)
+  })
+
+  it("rejette une chaîne sans dièse", () => {
+    expect(
+      updatePrimaryColorSchema.safeParse({ primaryColor: "2563eb" }).success,
+    ).toBe(false)
+  })
+
+  it("rejette une chaîne vide", () => {
+    expect(
+      updatePrimaryColorSchema.safeParse({ primaryColor: "" }).success,
+    ).toBe(false)
   })
 })

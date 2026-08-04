@@ -31,6 +31,8 @@ export const AUDIT_ACTIONS = {
   "settings.app_name.update": "Modification du nom de l'application",
   "settings.logo.update": "Modification du logo",
   "settings.logo.delete": "Retrait du logo",
+  "settings.primary_color.update": "Modification de la couleur principale",
+  "settings.primary_color.delete": "Réinitialisation de la couleur principale",
   "auth.login": "Connexion",
   "auth.password.change": "Changement de mot de passe",
   "auth.password.reset": "Réinitialisation de mot de passe",
