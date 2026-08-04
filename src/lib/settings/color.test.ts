@@ -2,12 +2,24 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildThemeCssVariables,
+  contrastRatio,
   darkModeVariant,
   hexToRgb,
   isValidHexColor,
   readableForeground,
   rgbToHsl,
 } from "@/lib/settings/color"
+
+describe("contrastRatio", () => {
+  it("vaut 21 entre blanc et noir purs, quel que soit l'ordre des arguments", () => {
+    expect(contrastRatio(1, 0)).toBe(21)
+    expect(contrastRatio(0, 1)).toBe(21)
+  })
+
+  it("vaut 1 entre deux luminances identiques", () => {
+    expect(contrastRatio(0.5, 0.5)).toBe(1)
+  })
+})
 
 // Fonctions pures, aucune base de données nécessaire — voir le commentaire
 // en tête de src/lib/settings/color.ts.
@@ -160,17 +172,16 @@ describe("buildThemeCssVariables", () => {
     }
   })
 
-  it("le mode clair utilise directement le hex fourni pour primary/ring/sidebar-primary/sidebar-ring/sidebar-accent", () => {
+  it("le mode clair utilise directement le hex fourni pour primary/ring/sidebar-primary/sidebar-ring", () => {
     const hex = "#2563eb"
     const { light } = buildThemeCssVariables(hex)
     expect(light["--primary"]).toBe(hex)
     expect(light["--ring"]).toBe(hex)
     expect(light["--sidebar-primary"]).toBe(hex)
     expect(light["--sidebar-ring"]).toBe(hex)
-    expect(light["--sidebar-accent"]).toBe(hex)
   })
 
-  it("le mode sombre utilise la variante assombrie (darkModeVariant) pour primary/ring/sidebar-primary/sidebar-ring/sidebar-accent", () => {
+  it("le mode sombre utilise la variante assombrie (darkModeVariant) pour primary/ring/sidebar-primary/sidebar-ring", () => {
     const hex = "#1e3a8a"
     const { dark } = buildThemeCssVariables(hex)
     const expected = darkModeVariant(hex)
@@ -178,25 +189,38 @@ describe("buildThemeCssVariables", () => {
     expect(dark["--ring"]).toBe(expected)
     expect(dark["--sidebar-primary"]).toBe(expected)
     expect(dark["--sidebar-ring"]).toBe(expected)
-    expect(dark["--sidebar-accent"]).toBe(expected)
   })
 
-  it("primary-foreground, sidebar-primary-foreground et sidebar-accent-foreground sont identiques dans chaque mode", () => {
+  it("primary-foreground et sidebar-primary-foreground sont identiques dans chaque mode", () => {
     const { light, dark } = buildThemeCssVariables("#facc15")
     expect(light["--sidebar-primary-foreground"]).toBe(light["--primary-foreground"])
     expect(dark["--sidebar-primary-foreground"]).toBe(dark["--primary-foreground"])
-    expect(light["--sidebar-accent-foreground"]).toBe(light["--primary-foreground"])
-    expect(dark["--sidebar-accent-foreground"]).toBe(dark["--primary-foreground"])
   })
 
-  it("--sidebar-accent est ce qui pilote réellement l'élément actif de la barre latérale dans ce projet (voir src/components/ui/sidebar.tsx)", () => {
-    // Non-régression du choix documenté dans buildThemeCssVariables : si ce
-    // test casse un jour parce que `--sidebar-accent` a été retiré du
-    // résultat, vérifier d'abord si src/components/ui/sidebar.tsx utilise
-    // encore `data-active:bg-sidebar-accent` avant de le supprimer d'ici.
-    const { light, dark } = buildThemeCssVariables("#16a34a")
-    expect(light["--sidebar-accent"]).toBe(light["--primary"])
-    expect(dark["--sidebar-accent"]).toBe(dark["--primary"])
+  it("--sidebar-accent est une teinte pastel de la couleur, pas la couleur pleine", () => {
+    // Non-régression du choix documenté dans buildThemeCssVariables : cette
+    // paire pilote l'élément actif ET le survol de la barre latérale (voir
+    // data-active:bg-sidebar-accent dans src/components/ui/sidebar.tsx) — la
+    // couleur pleine y serait visuellement très lourde. Fond très clair en
+    // mode clair (l=92%), très sombre en mode sombre (l=26%), même teinte.
+    const { light, dark } = buildThemeCssVariables("#2563eb")
+    expect(light["--sidebar-accent"]).not.toBe(light["--primary"])
+    expect(light["--sidebar-accent"]).toMatch(/^hsl\(\d+ \d+% 92%\)$/)
+    expect(dark["--sidebar-accent"]).toMatch(/^hsl\(\d+ \d+% 26%\)$/)
+  })
+
+  it("le texte de l'élément actif reprend la teinte de la couleur, foncée en clair et claire en sombre", () => {
+    // Bleu #2563eb : h≈221, s≈83%, l≈53% → texte clair plafonné à l=35%,
+    // texte sombre relevé à l=85%, même teinte/saturation dans les deux cas.
+    const { light, dark } = buildThemeCssVariables("#2563eb")
+    expect(light["--sidebar-accent-foreground"]).toMatch(/^hsl\(\d+ \d+% 35%\)$/)
+    expect(dark["--sidebar-accent-foreground"]).toMatch(/^hsl\(\d+ \d+% 85%\)$/)
+  })
+
+  it("une couleur déjà très foncée garde sa luminosité pour le texte de l'élément actif en mode clair", () => {
+    // Marine #1e3a8a : l≈33%, sous le plafond de 35% → conservée telle quelle.
+    const { light } = buildThemeCssVariables("#1e3a8a")
+    expect(light["--sidebar-accent-foreground"]).toMatch(/^hsl\(\d+ \d+% 33%\)$/)
   })
 
   it("jaune : texte sombre en mode clair", () => {
